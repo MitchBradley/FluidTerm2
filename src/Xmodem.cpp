@@ -134,7 +134,7 @@ static void write_packet(std::ostream& out, const char* buf, size_t packet_len, 
     memcpy(held_packet, buf, packet_len);
     held = true;
 }
-static int _xmodemReceive(SerialThread& serial, std::ostream& out) {
+static int _xmodemReceive(SerialPort& serial, std::ostream& out) {
     char    xbuff[1030]; /* 1024 for XModem 1k + 3 head chars + 2 crc + nul */
     char*   p;
     int     bufsz = 0, crc = 0;
@@ -217,7 +217,7 @@ static int _xmodemReceive(SerialThread& serial, std::ostream& out) {
     // Unreached
     return 0;
 }
-int xmodemReceive(SerialThread& serial, std::ostream& out) {
+int xmodemReceive(SerialPort& serial, std::ostream& out) {
     serial.setDirect();
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(1s);
@@ -227,7 +227,7 @@ int xmodemReceive(SerialThread& serial, std::ostream& out) {
     return retval;
 }
 
-static int _xmodemTransmit(SerialThread& serial, std::ifstream& infile) {
+static int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
     char    xbuff[1030]; /* 1024 for XModem 1k + 3 head chars + 2 crc + nul */
     size_t  bufsz;
     bool    crc      = true;
@@ -330,7 +330,7 @@ static int _xmodemTransmit(SerialThread& serial, std::ifstream& infile) {
     }
 }
 
-int xmodemTransmit(SerialThread& serial, std::ifstream& infile) {
+int xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
     serial.setDirect();
     int retval = _xmodemTransmit(serial, infile);
     serial.flushInput();

@@ -12,7 +12,7 @@ typedef enum tagSERIAL_STATE {
 
 } SERIAL_STATE;
 
-class SerialThread {
+class SerialPort {
 private:
     SERIAL_STATE m_eState;
     HANDLE       m_hThreadTerm;
@@ -30,8 +30,8 @@ private:
     HANDLE m_hCommPort;
 
 public:
-    SerialThread();
-    virtual ~SerialThread();
+    SerialPort();
+    virtual ~SerialPort();
 
     inline void SetDataReadEvent() { SetEvent(m_hDataRx); }
 

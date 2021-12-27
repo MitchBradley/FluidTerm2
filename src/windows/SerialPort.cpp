@@ -1,7 +1,7 @@
 #include <string>
 #include <iostream>
 #include <assert.h>
-#include "SerialThread.h"
+#include "SerialPort.h"
 #include <Process.h>
 
 #include "Colorize.h"
@@ -10,7 +10,7 @@
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-void SerialThread::setTimeout(DWORD ms) {
+void SerialPort::setTimeout(DWORD ms) {
     COMMTIMEOUTS timeouts;
     timeouts.ReadIntervalTimeout         = 0;
     timeouts.ReadTotalTimeoutMultiplier  = 0;
@@ -23,18 +23,18 @@ void SerialThread::setTimeout(DWORD ms) {
     }
 }
 
-void SerialThread::InvalidateHandle(HANDLE& hHandle) {
+void SerialPort::InvalidateHandle(HANDLE& hHandle) {
     hHandle = INVALID_HANDLE_VALUE;
 }
 
-void SerialThread::CloseAndCleanHandle(HANDLE& hHandle) {
+void SerialPort::CloseAndCleanHandle(HANDLE& hHandle) {
     BOOL abRet = CloseHandle(hHandle);
     if (!abRet) {
         assert(0);
     }
     InvalidateHandle(hHandle);
 }
-SerialThread::SerialThread() {
+SerialPort::SerialPort() {
     InvalidateHandle(m_hThreadTerm);
     InvalidateHandle(m_hThread);
     InvalidateHandle(m_hThreadStarted);
@@ -44,18 +44,18 @@ SerialThread::SerialThread() {
     m_eState = SS_UnInit;
 }
 
-SerialThread::~SerialThread() {
+SerialPort::~SerialPort() {
     m_eState = SS_Unknown;
 }
 
-void SerialThread::setDirect() {
+void SerialPort::setDirect() {
     m_tap = true;
 }
-void SerialThread::setIndirect() {
+void SerialPort::setIndirect() {
     setTimeout(10);
     m_tap = false;
 }
-int SerialThread::timedRead(uint32_t ms) {
+int SerialPort::timedRead(uint32_t ms) {
     setTimeout(ms);
     char  c;
     DWORD dwBytesRead;
@@ -66,11 +66,11 @@ int SerialThread::timedRead(uint32_t ms) {
 
     return dwBytesRead == 1 ? c : -1;
 }
-void SerialThread::flushInput() {
+void SerialPort::flushInput() {
     while (timedRead(500) >= 0) {}
 }
 
-bool SerialThread::Init(std::string szPortName, DWORD dwBaudRate, BYTE byParity, BYTE byStopBits, BYTE byByteSize) {
+bool SerialPort::Init(std::string szPortName, DWORD dwBaudRate, BYTE byParity, BYTE byStopBits, BYTE byByteSize) {
     bool hr = false;
     try {
         m_hDataRx = CreateEvent(0, 0, 0, 0);
@@ -131,7 +131,7 @@ bool SerialThread::Init(std::string szPortName, DWORD dwBaudRate, BYTE byParity,
         m_hThreadTerm    = CreateEvent(0, 0, 0, 0);
         m_hThreadStarted = CreateEvent(0, 0, 0, 0);
 
-        m_hThread = (HANDLE)_beginthreadex(0, 0, SerialThread::ThreadFn, (void*)this, 0, 0);
+        m_hThread = (HANDLE)_beginthreadex(0, 0, SerialPort::ThreadFn, (void*)this, 0, 0);
 
         DWORD dwWait = WaitForSingleObject(m_hThreadStarted, INFINITE);
 
@@ -150,9 +150,9 @@ bool SerialThread::Init(std::string szPortName, DWORD dwBaudRate, BYTE byParity,
     return true;
 }
 
-unsigned __stdcall SerialThread::ThreadFn(void* pvParam) {
-    SerialThread* apThis     = (SerialThread*)pvParam;
-    bool          abContinue = true;
+unsigned __stdcall SerialPort::ThreadFn(void* pvParam) {
+    SerialPort* apThis     = (SerialPort*)pvParam;
+    bool        abContinue = true;
 
     SetEvent(apThis->m_hThreadStarted);
     while (1) {
@@ -173,7 +173,7 @@ unsigned __stdcall SerialThread::ThreadFn(void* pvParam) {
     return 0;
 }
 
-HRESULT SerialThread::write(const char* data, DWORD dwSize) {
+HRESULT SerialPort::write(const char* data, DWORD dwSize) {
     int        iRet = 0;
     OVERLAPPED ov;
     memset(&ov, 0, sizeof(ov));

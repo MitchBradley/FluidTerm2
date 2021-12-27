@@ -1,7 +1,7 @@
 #pragma once
 
-#include "SerialThread.h"
+#include "SerialPort.h"
 #include <fstream>
 
-int xmodemReceive(SerialThread& serial, std::ostream& out);
-int xmodemTransmit(SerialThread& serial, std::ifstream& in);
+int xmodemReceive(SerialPort& serial, std::ostream& out);
+int xmodemTransmit(SerialPort& serial, std::ifstream& in);
