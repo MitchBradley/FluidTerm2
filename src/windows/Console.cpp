@@ -1,0 +1,79 @@
+#include "Console.h"
+#include <windows.h>
+#include <iostream>
+
+const int ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
+const int ENABLE_VIRTUAL_TERMINAL_INPUT      = 0x0200;
+
+HANDLE hStdin;
+HANDLE hStdout;
+WORD   wOldColorAttrs;
+DWORD  fdwNewInMode;
+DWORD  fdwNewOutMode;
+DWORD  fdwOldInMode;
+DWORD  fdwOldOutMode;
+
+void editModeOn() {
+    SetConsoleMode(hStdout, fdwOldOutMode);
+    // SetConsoleMode(hStdin, fdwOldInMode | ENABLE_PROCESSED_INPUT | ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
+    // SetConsoleMode(hStdin, fdwOldInMode | ENABLE_LINE_INPUT);
+    SetConsoleMode(hStdin, ENABLE_PROCESSED_INPUT | ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS);
+}
+
+void editModeOff() {
+    SetConsoleMode(hStdout, fdwNewOutMode);
+    // SetConsoleMode(hStdin, fdwOldInMode | ENABLE_PROCESSED_INPUT | ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
+    // SetConsoleMode(hStdin, fdwOldInMode | ENABLE_LINE_INPUT);
+    SetConsoleMode(hStdin, fdwNewInMode);
+}
+
+bool setConsoleModes() {
+    // Save the current modes, to be restored on exit.
+
+    if (!GetConsoleMode(hStdin, &fdwOldInMode)) {
+        return false;
+    }
+
+    // Enable conversion of special keys to escape sequences
+    fdwNewInMode = ENABLE_VIRTUAL_TERMINAL_INPUT;
+    if (!SetConsoleMode(hStdin, fdwNewInMode)) {
+        return false;
+    }
+    return true;
+}
+
+bool setConsoleColor() {
+    hStdin = GetStdHandle(STD_INPUT_HANDLE);
+    if (hStdin == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hStdout == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    if (!GetConsoleMode(hStdout, &fdwOldOutMode)) {
+        return false;
+    }
+
+    CONSOLE_SCREEN_BUFFER_INFO csbiInfo;
+    GetConsoleScreenBufferInfo(hStdout, &csbiInfo);
+    wOldColorAttrs = csbiInfo.wAttributes;
+    SetConsoleTextAttribute(hStdout, 0x0f);
+
+    // Enable handling of escape sequences on output
+    fdwNewOutMode = ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    if (!SetConsoleMode(hStdout, fdwNewOutMode)) {
+        return false;
+    }
+
+    std::cout << "\x1b[2J";  // Clear screen to apply the new colors
+    return true;
+}
+
+void restoreConsoleModes() {
+    SetConsoleMode(hStdout, fdwOldOutMode);
+    SetConsoleMode(hStdout, fdwOldInMode);
+    SetConsoleTextAttribute(hStdout, wOldColorAttrs);
+}
