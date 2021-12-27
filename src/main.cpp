@@ -4,7 +4,7 @@
 #include <conio.h>
 #include <stdio.h>
 #include <string>
-#include "Filter.h"
+#include "Colorize.h"
 #include "SerialThread.h"
 #include "FileDialog.h"
 #include "Xmodem.h"

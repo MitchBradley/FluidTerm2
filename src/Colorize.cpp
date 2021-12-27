@@ -2,7 +2,7 @@
 #include <string>
 #include <iostream>
 #include <sstream>
-#include "Filter.h"
+#include "Colorize.h"
 
 static const char* gray          = "\x1b[0;37;40m";
 static const char* red           = "\x1b[31m";
@@ -96,7 +96,7 @@ static void colorizeLine(std::string line) {
 
 static std::string residue = "";
 
-void filterOutput(const char* buf, size_t len) {
+void colorizeOutput(const char* buf, size_t len) {
     //    out('{');    out(residue);     out('}');
     std::string next(buf, len);
     residue += next;

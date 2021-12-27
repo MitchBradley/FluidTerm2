@@ -4,7 +4,7 @@
 #include "SerialThread.h"
 #include <Process.h>
 
-#include "Filter.h"
+#include "Colorize.h"
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -164,9 +164,10 @@ unsigned __stdcall SerialThread::ThreadFn(void* pvParam) {
 
         ::ReadFile(apThis->m_hCommPort, szTmp, sizeof(szTmp), &dwBytesRead, NULL);
         if (dwBytesRead > 0) {
-            filterOutput(szTmp, dwBytesRead);
+            colorizeOutput(szTmp, dwBytesRead);
         } else {
-            //            std::cout << "T" << std::endl;
+            // Timeout
+            // std::cout << "T" << std::endl;
         }
     }
     return 0;
