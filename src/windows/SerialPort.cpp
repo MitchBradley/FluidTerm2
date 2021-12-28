@@ -219,7 +219,7 @@ bool selectComPort(std::string& comName)  //added function to find the present s
         }
     }
     if (choices == 0) {
-        std::cerr << "No COM ports";
+        comName = "";
         return false;
     }
     if (choices == 1) {

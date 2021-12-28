@@ -115,7 +115,7 @@ void colorizeOutput(const char* buf, size_t len) {
             colorizeLine(line);
         }
     }
-    if (residue.length() && (lineCnt == 0 || (residue[0] != '<' && residue[0] != '[' && residue[0] != '$'))) {
+    if (residue.length() && (lineCnt == 0 && (residue.length() == 1 || (residue[0] != '<' && residue[0] != '[' && residue[0] != '$')))) {
         //   If there were no complete lines and there are extra
         // characters that do not form a complete lines, we send
         // the extra characters immediately, as they probably
@@ -126,6 +126,9 @@ void colorizeOutput(const char* buf, size_t len) {
         // did not fit entirely in the serial input buffer.
         // However, if that residue cannot possibly be the
         // start of a colorized sequence, we send it anyway.
+        //   This heuristic is probably imperfect; distinguishing
+        // between echo of interaction and program output is
+        // tricky.
         out(residue);
         residue.clear();
     }

@@ -11,11 +11,27 @@
 
 void ErrorExit(const char* msg) {
     std::cerr << msg << std::endl;
+    std::cerr << "..press any key to continue" << std::endl;
+    getch();
+
+    // Restore input mode on exit.
+    restoreConsoleModes();
+    exit(1);
+}
+
+void OkayExit(const char* msg) {
+    std::cerr << msg << std::endl;
     Sleep(1000);
 
     // Restore input mode on exit.
     restoreConsoleModes();
     exit(0);
+}
+
+static SerialPort comport;
+
+void enableFluidEcho() {
+    comport.write("\x1b[C");  // Send right-arrow to enter FluidNC echo mode
 }
 
 const char* getSaveName(const char* proposal) {
@@ -43,7 +59,7 @@ int main(int argc, char** argv) {
 
     std::string comName;
     if (!selectComPort(comName)) {
-        ErrorExit("");
+        ErrorExit("No COM port found");
     }
 
     std::cout << "Using " << comName << std::endl;
@@ -55,15 +71,12 @@ int main(int argc, char** argv) {
         ErrorExit("setConsoleModes failed");
     }
 
-    SerialPort comport;
-
     // Start a thread to read the serial port and send to the console
     if (!comport.Init(comName.c_str(), 115200)) {
         ErrorExit("Cannot open serial port");
     }
 
-    Sleep(1000);
-    comport.write("\x1b[C");  // Send right-arrow to enter FluidNC echo mode
+    enableFluidEcho();
 
     // In the main thread, read the console and send to the serial port
     while (true) {
@@ -79,6 +92,9 @@ int main(int argc, char** argv) {
                 comport.setRts(true);
                 Sleep(500);
                 comport.setRts(false);
+                Sleep(2000);
+                enableFluidEcho();
+
             } break;
             case CTRL('U'): {  // ^U
                 const char* path = getFileName();
@@ -101,7 +117,7 @@ int main(int argc, char** argv) {
             } break;
 
             case CTRL(']'):
-                ErrorExit("Exit by ^]");
+                OkayExit("Exit by ^]");
                 break;
             default:
                 comport.write(&c, 1);
