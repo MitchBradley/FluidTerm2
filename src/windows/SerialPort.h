@@ -34,6 +34,9 @@ public:
     HRESULT write(std::string s) { return write(s.c_str(), s.length()); }
     void    write(char data) { write(&data, 1); }
     bool    Init(std::string szPortName = "COM1", DWORD dwBaudRate = 115200, BYTE byParity = 0, BYTE byStopBits = 1, BYTE byByteSize = 8);
+
+    void setRts(bool on);
+    void setDtr(bool on);
 };
 
 bool selectComPort(std::string& comName);

@@ -47,6 +47,7 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "Using " << comName << std::endl;
+    std::cout << "Ctrl-] to exit, Ctrl-U to upload, Ctrl-R to reset" << std::endl;
 
     // Do this after selecting the COM port because we want
     // to be able to echo console input during COM selection.
@@ -71,8 +72,15 @@ int main(int argc, char** argv) {
         if (c == '\r') {
             c = '\n';
         }
+#define CTRL(N) ((N)&0x1f)
         switch (c) {
-            case 0x15: {  // ^U
+            case CTRL('R'): {
+                std::cout << "Resetting MCU" << std::endl;
+                comport.setRts(true);
+                Sleep(500);
+                comport.setRts(false);
+            } break;
+            case CTRL('U'): {  // ^U
                 const char* path = getFileName();
                 if (*path == '\0') {
                     std::cout << "No file selected" << std::endl;
@@ -92,8 +100,8 @@ int main(int argc, char** argv) {
                 }
             } break;
 
-            case 0x1d:  // ^]
-                ErrorExit("Killed by ^]");
+            case CTRL(']'):
+                ErrorExit("Exit by ^]");
                 break;
             default:
                 comport.write(&c, 1);

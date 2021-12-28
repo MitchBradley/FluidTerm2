@@ -106,7 +106,8 @@ bool SerialPort::Init(std::string portName, DWORD dwBaudRate, BYTE byParity, BYT
             dcb.StopBits = ONE5STOPBITS;
 
         dcb.fDsrSensitivity = 0;
-        dcb.fDtrControl     = DTR_CONTROL_ENABLE;
+        dcb.fDtrControl     = DTR_CONTROL_DISABLE;
+        dcb.fRtsControl     = RTS_CONTROL_DISABLE;
         dcb.fOutxDsrFlow    = 0;
 
         if (!::SetCommState(m_hCommPort, &dcb)) {
@@ -134,6 +135,26 @@ bool SerialPort::Init(std::string portName, DWORD dwBaudRate, BYTE byParity, BYT
         hr = false;
     }
     return true;
+}
+
+void SerialPort::setRts(bool on) {
+    DCB dcb       = { 0 };
+    dcb.DCBlength = sizeof(DCB);
+    if (!::GetCommState(m_hCommPort, &dcb)) {
+        return;
+    }
+    dcb.fRtsControl = on ? RTS_CONTROL_ENABLE : RTS_CONTROL_DISABLE;
+    ::SetCommState(m_hCommPort, &dcb);
+}
+
+void SerialPort::setDtr(bool on) {
+    DCB dcb       = { 0 };
+    dcb.DCBlength = sizeof(DCB);
+    if (!::GetCommState(m_hCommPort, &dcb)) {
+        return;
+    }
+    dcb.fDtrControl = on ? DTR_CONTROL_ENABLE : DTR_CONTROL_DISABLE;
+    ::SetCommState(m_hCommPort, &dcb);
 }
 
 unsigned __stdcall SerialPort::ThreadFn(void* pvParam) {
