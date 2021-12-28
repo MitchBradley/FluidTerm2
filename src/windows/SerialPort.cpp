@@ -39,21 +39,16 @@ SerialPort::SerialPort() {
     InvalidateHandle(m_hThread);
     InvalidateHandle(m_hThreadStarted);
     InvalidateHandle(m_hCommPort);
-    InvalidateHandle(m_hDataRx);
-
-    m_eState = SS_UnInit;
 }
 
-SerialPort::~SerialPort() {
-    m_eState = SS_Unknown;
-}
+SerialPort::~SerialPort() {}
 
 void SerialPort::setDirect() {
-    m_tap = true;
+    m_direct = true;
 }
 void SerialPort::setIndirect() {
     setTimeout(10);
-    m_tap = false;
+    m_direct = false;
 }
 int SerialPort::timedRead(uint32_t ms) {
     setTimeout(ms);
@@ -70,25 +65,22 @@ void SerialPort::flushInput() {
     while (timedRead(500) >= 0) {}
 }
 
-bool SerialPort::Init(std::string szPortName, DWORD dwBaudRate, BYTE byParity, BYTE byStopBits, BYTE byByteSize) {
+bool SerialPort::Init(std::string portName, DWORD dwBaudRate, BYTE byParity, BYTE byStopBits, BYTE byByteSize) {
     bool hr = false;
     try {
-        m_hDataRx = CreateEvent(0, 0, 0, 0);
         //open the COM Port
-        //        m_hCommPort = CreateFile(szPortName.c_str(),
-        m_hCommPort = CreateFile("\\\\.\\COM16",
+        std::string portDev = "\\\\.\\";  // Prefix to convert to NT device name
+        portDev += portName;
+        m_hCommPort = CreateFile(portDev.c_str(),               // e.g. "\\\\.\\COM16"
                                  GENERIC_READ | GENERIC_WRITE,  //access ( read and write)
                                  0,                             //(share) 0:cannot share the COM port
                                  0,                             //security  (None)
                                  OPEN_EXISTING,                 // creation : open_existing
-                                 //                                 FILE_FLAG_OVERLAPPED,
-                                 0,  // Not overlapped
-                                 0   // no templates file for COM port...
+                                 0,                             // Not overlapped
+                                 0                              // no templates file for COM port...
         );
         if (m_hCommPort == INVALID_HANDLE_VALUE) {
-            std::cout << "Can't open " << szPortName.c_str() << std::endl;
-
-            //           assert(0);
+            std::cout << "Can't open " << portName << std::endl;
             return false;
         }
 
@@ -97,11 +89,8 @@ bool SerialPort::Init(std::string szPortName, DWORD dwBaudRate, BYTE byParity, B
             return false;
         }
 
-        //now we need to set baud rate etc,
-        DCB dcb = { 0 };
-
+        DCB dcb       = { 0 };
         dcb.DCBlength = sizeof(DCB);
-
         if (!::GetCommState(m_hCommPort, &dcb)) {
             return false;
         }
@@ -144,9 +133,6 @@ bool SerialPort::Init(std::string szPortName, DWORD dwBaudRate, BYTE byParity, B
         assert(0);
         hr = false;
     }
-    if (SUCCEEDED(hr)) {
-        m_eState = SS_Init;
-    }
     return true;
 }
 
@@ -156,8 +142,9 @@ unsigned __stdcall SerialPort::ThreadFn(void* pvParam) {
 
     SetEvent(apThis->m_hThreadStarted);
     while (1) {
-        while (apThis->m_tap) {
-            Sleep(1000);
+        // When Xmodem is using the serial port directly we stop polling in the thread
+        while (apThis->m_direct) {
+            Sleep(100);
         }
         DWORD dwBytesRead = 0;
         char  szTmp[128];
