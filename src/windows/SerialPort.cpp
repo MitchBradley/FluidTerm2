@@ -65,57 +65,73 @@ void SerialPort::flushInput() {
     while (timedRead(500) >= 0) {}
 }
 
+bool SerialPort::reOpenPort() {
+    //open the COM Port
+    m_hCommPort = CreateFile(m_commName.c_str(),            // e.g. "\\\\.\\COM16"
+                             GENERIC_READ | GENERIC_WRITE,  //access ( read and write)
+                             0,                             //(share) 0:cannot share the COM port
+                             0,                             //security  (None)
+                             OPEN_EXISTING,                 // creation : open_existing
+                             0,                             // Not overlapped
+                             0                              // no templates file for COM port...
+    );
+    if (m_hCommPort == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    if (!::SetCommMask(m_hCommPort, EV_RXCHAR | EV_TXEMPTY)) {
+        assert(0);
+        return false;
+    }
+
+    DCB dcb       = { 0 };
+    dcb.DCBlength = sizeof(DCB);
+    if (!::GetCommState(m_hCommPort, &dcb)) {
+        return false;
+    }
+
+    dcb.BaudRate = m_baud;
+    dcb.ByteSize = m_dataBits;
+    dcb.Parity   = m_parity;
+    switch (m_stopBits) {
+        case 1:
+            dcb.StopBits = ONESTOPBIT;
+            break;
+        case 2:
+            dcb.StopBits = TWOSTOPBITS;
+            break;
+        default:
+            dcb.StopBits = ONE5STOPBITS;
+            break;
+    }
+
+    dcb.fDsrSensitivity = 0;
+    dcb.fDtrControl     = DTR_CONTROL_DISABLE;
+    dcb.fRtsControl     = RTS_CONTROL_DISABLE;
+    dcb.fOutxDsrFlow    = 0;
+
+    if (!::SetCommState(m_hCommPort, &dcb)) {
+        assert(0);
+        return false;
+    }
+    setTimeout(10);
+
+    return true;
+}
+
 bool SerialPort::Init(std::string portName, DWORD dwBaudRate, BYTE byParity, BYTE byStopBits, BYTE byByteSize) {
+    m_baud     = dwBaudRate;
+    m_parity   = byParity;
+    m_stopBits = byStopBits;
+    m_dataBits = byByteSize;
+    m_commName = "\\\\.\\";  // Prefix to convert to NT device name
+    m_commName += portName;
+
     bool hr = false;
     try {
-        //open the COM Port
-        std::string portDev = "\\\\.\\";  // Prefix to convert to NT device name
-        portDev += portName;
-        m_hCommPort = CreateFile(portDev.c_str(),               // e.g. "\\\\.\\COM16"
-                                 GENERIC_READ | GENERIC_WRITE,  //access ( read and write)
-                                 0,                             //(share) 0:cannot share the COM port
-                                 0,                             //security  (None)
-                                 OPEN_EXISTING,                 // creation : open_existing
-                                 0,                             // Not overlapped
-                                 0                              // no templates file for COM port...
-        );
-        if (m_hCommPort == INVALID_HANDLE_VALUE) {
-            std::cout << "Can't open " << portName << std::endl;
+        if (!reOpenPort()) {
             return false;
         }
-
-        if (!::SetCommMask(m_hCommPort, EV_RXCHAR | EV_TXEMPTY)) {
-            assert(0);
-            return false;
-        }
-
-        DCB dcb       = { 0 };
-        dcb.DCBlength = sizeof(DCB);
-        if (!::GetCommState(m_hCommPort, &dcb)) {
-            return false;
-        }
-
-        dcb.BaudRate = dwBaudRate;
-        dcb.ByteSize = byByteSize;
-        dcb.Parity   = byParity;
-        if (byStopBits == 1)
-            dcb.StopBits = ONESTOPBIT;
-        else if (byStopBits == 2)
-            dcb.StopBits = TWOSTOPBITS;
-        else
-            dcb.StopBits = ONE5STOPBITS;
-
-        dcb.fDsrSensitivity = 0;
-        dcb.fDtrControl     = DTR_CONTROL_DISABLE;
-        dcb.fRtsControl     = RTS_CONTROL_DISABLE;
-        dcb.fOutxDsrFlow    = 0;
-
-        if (!::SetCommState(m_hCommPort, &dcb)) {
-            assert(0);
-            return false;
-        }
-
-        setTimeout(10);
 
         //create thread terminator event...
         m_hThreadTerm    = CreateEvent(0, 0, 0, 0);
@@ -170,7 +186,31 @@ unsigned __stdcall SerialPort::ThreadFn(void* pvParam) {
         DWORD dwBytesRead = 0;
         char  szTmp[128];
 
-        ::ReadFile(apThis->m_hCommPort, szTmp, sizeof(szTmp), &dwBytesRead, NULL);
+        if (!::ReadFile(apThis->m_hCommPort, szTmp, sizeof(szTmp), &dwBytesRead, NULL)) {
+            auto err = GetLastError();
+            switch (err) {
+                case 0:
+                    break;
+                case ERROR_BAD_COMMAND:
+                case ERROR_OPERATION_ABORTED:
+                    errorColor();
+                    std::cout << "Serial port disconnected - waiting for reconnect" << std::endl;
+                    normalColor();
+                    std::cout << "Type Ctrl-] to quit" << std::endl;
+                    CloseHandle(apThis->m_hCommPort);
+                    while (!apThis->reOpenPort()) {
+                        Sleep(100);
+                    }
+                    goodColor();
+                    std::cout << "Serial port reconnected" << std::endl;
+                    normalColor();
+                    resetFluidNC();
+                    break;
+                default:
+                    std::cout << "Error " << err << std::endl;
+                    break;
+            }
+        }
         if (dwBytesRead > 0) {
             colorizeOutput(szTmp, dwBytesRead);
         } else {

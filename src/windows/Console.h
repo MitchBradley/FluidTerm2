@@ -5,3 +5,4 @@ void editModeOff();
 bool setConsoleModes();
 bool setConsoleColor();
 void restoreConsoleModes();
+int  getConsoleChar();

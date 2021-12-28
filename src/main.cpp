@@ -3,13 +3,14 @@
 #include <conio.h>
 #include <stdio.h>
 #include <string>
+#include "Main.h"
 #include "Colorize.h"
 #include "SerialPort.h"
 #include "FileDialog.h"
 #include "Xmodem.h"
 #include "Console.h"
 
-void ErrorExit(const char* msg) {
+void errorExit(const char* msg) {
     std::cerr << msg << std::endl;
     std::cerr << "..press any key to continue" << std::endl;
     getch();
@@ -19,7 +20,7 @@ void ErrorExit(const char* msg) {
     exit(1);
 }
 
-void OkayExit(const char* msg) {
+void okayExit(const char* msg) {
     std::cerr << msg << std::endl;
     Sleep(1000);
 
@@ -30,8 +31,17 @@ void OkayExit(const char* msg) {
 
 static SerialPort comport;
 
-void enableFluidEcho() {
+static void enableFluidEcho() {
     comport.write("\x1b[C");  // Send right-arrow to enter FluidNC echo mode
+}
+
+void resetFluidNC() {
+    std::cout << "Resetting MCU" << std::endl;
+    comport.setRts(true);
+    Sleep(500);
+    comport.setRts(false);
+    Sleep(2000);
+    enableFluidEcho();
 }
 
 const char* getSaveName(const char* proposal) {
@@ -54,26 +64,27 @@ const char* getSaveName(const char* proposal) {
 
 int main(int argc, char** argv) {
     if (!setConsoleColor()) {
-        ErrorExit("setConsoleColor failed");
+        errorExit("setConsoleColor failed");
+    }
+
+    if (!setConsoleModes()) {
+        errorExit("setConsoleModes failed");
     }
 
     std::string comName;
+    editModeOn();
     if (!selectComPort(comName)) {
-        ErrorExit("No COM port found");
+        editModeOff();
+        errorExit("No COM port found");
     }
+    editModeOff();
 
     std::cout << "Using " << comName << std::endl;
     std::cout << "Ctrl-] to exit, Ctrl-U to upload, Ctrl-R to reset" << std::endl;
 
-    // Do this after selecting the COM port because we want
-    // to be able to echo console input during COM selection.
-    if (!setConsoleModes()) {
-        ErrorExit("setConsoleModes failed");
-    }
-
     // Start a thread to read the serial port and send to the console
     if (!comport.Init(comName.c_str(), 115200)) {
-        ErrorExit("Cannot open serial port");
+        errorExit("Cannot open serial port");
     }
 
     enableFluidEcho();
@@ -81,20 +92,14 @@ int main(int argc, char** argv) {
     // In the main thread, read the console and send to the serial port
     while (true) {
         char c;
-        c = getch();
+        c = getConsoleChar();
         if (c == '\r') {
             c = '\n';
         }
 #define CTRL(N) ((N)&0x1f)
         switch (c) {
             case CTRL('R'): {
-                std::cout << "Resetting MCU" << std::endl;
-                comport.setRts(true);
-                Sleep(500);
-                comport.setRts(false);
-                Sleep(2000);
-                enableFluidEcho();
-
+                resetFluidNC();
             } break;
             case CTRL('U'): {  // ^U
                 const char* path = getFileName();
@@ -117,9 +122,10 @@ int main(int argc, char** argv) {
             } break;
 
             case CTRL(']'):
-                OkayExit("Exit by ^]");
+                okayExit("Exited by ^]");
                 break;
             default:
+                expectEcho();
                 comport.write(&c, 1);
                 break;
         }

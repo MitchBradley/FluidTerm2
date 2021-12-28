@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <string>
+#include "Main.h"
 
 class SerialPort {
 private:
@@ -16,13 +17,21 @@ private:
 
     static unsigned __stdcall ThreadFn(void* pvParam);
 
-    HANDLE m_hCommPort;
+    DWORD m_baud;
+    BYTE  m_parity;
+    BYTE  m_stopBits;
+    BYTE  m_dataBits;
+
+    std::string m_commName;
+    HANDLE      m_hCommPort;
 
     void setTimeout(DWORD ms);
 
 public:
     SerialPort();
     virtual ~SerialPort();
+
+    bool reOpenPort();
 
     void setDirect();
     void setIndirect();

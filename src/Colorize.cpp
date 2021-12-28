@@ -76,6 +76,16 @@ static bool colorized(std::string& line, const char* tag, const char* color) {
     return true;
 }
 
+void errorColor() {
+    out(error_color);
+}
+void normalColor() {
+    out(input_color);
+}
+void goodColor() {
+    out(good_color);
+}
+
 static void colorizeLine(std::string line) {
     // clang-format off
     bool matched = colorizedSetting(line) ||
@@ -96,6 +106,12 @@ static void colorizeLine(std::string line) {
 
 static std::string residue = "";
 
+static bool expectingEcho = false;
+
+void expectEcho() {
+    expectingEcho = true;
+}
+
 void colorizeOutput(const char* buf, size_t len) {
     //    out('{');    out(residue);     out('}');
     std::string next(buf, len);
@@ -115,7 +131,8 @@ void colorizeOutput(const char* buf, size_t len) {
             colorizeLine(line);
         }
     }
-    if (residue.length() && (lineCnt == 0 && (residue.length() == 1 || (residue[0] != '<' && residue[0] != '[' && residue[0] != '$')))) {
+    if (residue.length() &&
+        ((lineCnt == 0 && (expectingEcho || residue.length() == 1 || (residue[0] != '<' && residue[0] != '[' && residue[0] != '$'))))) {
         //   If there were no complete lines and there are extra
         // characters that do not form a complete lines, we send
         // the extra characters immediately, as they probably
@@ -129,6 +146,7 @@ void colorizeOutput(const char* buf, size_t len) {
         //   This heuristic is probably imperfect; distinguishing
         // between echo of interaction and program output is
         // tricky.
+        expectingEcho = false;
         out(residue);
         residue.clear();
     }

@@ -77,3 +77,8 @@ void restoreConsoleModes() {
     SetConsoleMode(hStdout, fdwOldInMode);
     SetConsoleTextAttribute(hStdout, wOldColorAttrs);
 }
+
+int getConsoleChar() {
+    char c;
+    return ::ReadFile(hStdin, &c, 1, NULL, NULL) ? c : -1;
+}
