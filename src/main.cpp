@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
                     msg += '\n';
                     comport.write(msg);
                     Sleep(1000);
-                    std::ifstream infile(path, std::ifstream::in);
+                    std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
                     int           ret = xmodemTransmit(comport, infile);
                     if (ret < 0) {
                         std::cout << "Returned " << ret << std::endl;

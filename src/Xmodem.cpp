@@ -300,6 +300,7 @@ static int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
                         switch (c) {
                             case ACK:
                                 ++packetno;
+                                std::cout << int(packetno) << '\r';
                                 len += bufsz;
                                 goto start_trans;
                             case CAN:
@@ -321,8 +322,9 @@ static int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
             } else {
                 for (retry = 0; retry < 10; ++retry) {
                     serial.write(EOT);
-                    if ((c = serial.timedRead(2000)) == ACK)
+                    if ((c = serial.timedRead(2000)) == ACK) {
                         break;
+                    }
                 }
                 return (c == ACK) ? len : -5;
             }
