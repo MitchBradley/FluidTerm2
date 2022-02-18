@@ -10,7 +10,7 @@
 #include "Xmodem.h"
 #include "Console.h"
 
-void errorExit(const char* msg) {
+static void errorExit(const char* msg) {
     std::cerr << msg << std::endl;
     std::cerr << "..press any key to continue" << std::endl;
     getch();
@@ -20,7 +20,7 @@ void errorExit(const char* msg) {
     exit(1);
 }
 
-void okayExit(const char* msg) {
+static void okayExit(const char* msg) {
     std::cerr << msg << std::endl;
     Sleep(1000);
 
@@ -44,7 +44,7 @@ void resetFluidNC() {
     enableFluidEcho();
 }
 
-const char* getSaveName(const char* proposal) {
+static const char* getSaveName(const char* proposal) {
     editModeOn();
 
     static std::string saveName;
@@ -91,8 +91,12 @@ int main(int argc, char** argv) {
 
     // In the main thread, read the console and send to the serial port
     while (true) {
-        char c;
-        c = getConsoleChar();
+        int res = getConsoleChar();
+        if (res < 0) {
+            errorExit("Input error");
+        }
+        char c = res;
+
         if (c == '\r') {
             c = '\n';
         }
