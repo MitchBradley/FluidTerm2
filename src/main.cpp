@@ -62,6 +62,65 @@ static const char* getSaveName(const char* proposal) {
     return saveName.c_str();
 }
 
+struct cmd {
+    const char* code;
+    uint8_t     value;
+    const char* help;
+} realtime_commands[] = {
+    { "sd", 0x84, "Safety Door" },
+    { "jc", 0x85, "JogCancel" },
+    { "dr", 0x86, "DebugReport" },
+    { "fr", 0x90, "FeedOvrReset" },
+    { "f>", 0x91, "FeedOvrCoarsePlus" },
+    { "f<", 0x92, "FeedOvrCoarseMinus" },
+    { "f+", 0x93, "FeedOvrFinePlus" },
+    { "f-", 0x94, "FeedOvrFineMinus" },
+    { "rr", 0x95, "RapidOvrReset" },
+    { "rm", 0x96, "RapidOvrMedium" },
+    { "rl", 0x97, "RapidOvrLow" },
+    { "rx", 0x98, "RapidOvrExtraLow" },
+    { "sr", 0x99, "SpindleOvrReset" },
+    { "s>", 0x9A, "SpindleOvrCoarsePlus" },
+    { "s<", 0x9B, "SpindleOvrCoarseMinus" },
+    { "s+", 0x9C, "SpindleOvrFinePlus" },
+    { "s-", 0x9D, "SpindleOvrFineMinus" },
+    { "ss", 0x9E, "SpindleOvrStop" },
+    { "ft", 0xA0, "CoolantFloodOvrToggle" },
+    { "mt", 0xA1, "CoolantMistOvrToggle" },
+    { NULL, 0, NULL },
+};
+
+char get_character() {
+    int res = getConsoleChar();
+    if (res < 0) {
+        errorExit("Input error");
+    }
+    return res;
+}
+void sendOverride() {
+    std::cout << "Enter 2-character code - xx for help: ";
+
+    char c[3];
+    c[0] = tolower(get_character());
+    std::cout << c[0];
+    c[1] = tolower(get_character());
+    std::cout << c[1] << ' ';
+    c[2] = '\0';
+
+    for (struct cmd* p = realtime_commands; p->code; p++) {
+        if (!strcmp(c, p->code)) {
+            char ch = p->value;
+            std::cout << '<' << p->help << '>' << std::endl;
+            comport.write(&ch, 1);
+            return;
+        }
+    }
+    std::cout << std::endl << "The codes are:" << std::endl;
+    for (struct cmd* p = realtime_commands; p->code; p++) {
+        std::cout << p->code << " " << p->help << std::endl;
+    }
+}
+
 int main(int argc, char** argv) {
     if (!setConsoleColor()) {
         errorExit("setConsoleColor failed");
@@ -91,11 +150,7 @@ int main(int argc, char** argv) {
 
     // In the main thread, read the console and send to the serial port
     while (true) {
-        int res = getConsoleChar();
-        if (res < 0) {
-            errorExit("Input error");
-        }
-        char c = res;
+        char c = get_character();
 
         if (c == '\r') {
             c = '\n';
@@ -127,6 +182,9 @@ int main(int argc, char** argv) {
 
             case CTRL(']'):
                 okayExit("Exited by ^]");
+                break;
+            case CTRL('O'):
+                sendOverride();
                 break;
             default:
                 expectEcho();
