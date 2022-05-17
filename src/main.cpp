@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
     editModeOff();
 
     std::cout << "Using " << comName << std::endl;
-    std::cout << "Ctrl-] to exit, Ctrl-U to upload, Ctrl-R to reset" << std::endl;
+    std::cout << "Ctrl-Q or Ctrl-] to exit, Ctrl-U to upload, Ctrl-R to reset, Ctrl-O to send override" << std::endl;
 
     // Start a thread to read the serial port and send to the console
     if (!comport.Init(comName.c_str(), 115200)) {
@@ -186,6 +186,9 @@ int main(int argc, char** argv) {
 
             case CTRL(']'):
                 okayExit("Exited by ^]");
+                break;
+            case CTRL('Q'):
+                okayExit("Exited by ^Q");
                 break;
             case CTRL('O'):
                 sendOverride();
