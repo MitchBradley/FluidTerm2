@@ -192,6 +192,7 @@ unsigned __stdcall SerialPort::ThreadFn(void* pvParam) {
                 case 0:
                     break;
                 case ERROR_BAD_COMMAND:
+                case ERROR_ACCESS_DENIED:
                 case ERROR_OPERATION_ABORTED:
                     errorColor();
                     std::cout << "Serial port disconnected - waiting for reconnect" << std::endl;
