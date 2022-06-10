@@ -76,7 +76,7 @@ static uint16_t crc16_ccitt(const char* buf, size_t len) {
 #define CTRLZ 0x1A
 
 #define DLY_1S 1000
-#define MAXRETRANS 25
+#define MAXRETRANS 6
 #define TRANSMIT_XMODEM_1K
 
 static int check(int crc, const char* buf, int sz) {
@@ -292,9 +292,11 @@ static int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
                     }
                     xbuff[bufsz + 3] = ccks;
                 }
-                for (retry = 0; retry < MAXRETRANS; ++retry) {
-                    for (i = 0; i < bufsz + 4 + (crc ? 1 : 0); ++i) {
-                        serial.write(xbuff[i]);
+                bool echoing = false;
+                for (retry = 0; retry < MAXRETRANS;) {
+                    if (!echoing) {
+                        serial.write(xbuff, bufsz + 4 + (crc ? 1 : 0));
+                        ++retry;
                     }
                     if ((c = serial.timedRead(1000)) >= 0) {
                         switch (c) {
@@ -310,14 +312,23 @@ static int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
                                 }
                                 break;
                             case NAK:
+                                std::cout << " NAK ";
+                                echoing = false;
+                                break;
                             default:
+                                std::cout << char(c);
+                                echoing = true;
                                 break;
                         }
+                    } else {
+                        std::cout << " Timeout ";
+                        echoing = false;
                     }
                 }
                 serial.write(CAN);
                 serial.write(CAN);
                 serial.write(CAN);
+                std::cout << std::endl << "Giving up" << std::endl;
                 return -4; /* xmit error */
             } else {
                 for (retry = 0; retry < 10; ++retry) {
