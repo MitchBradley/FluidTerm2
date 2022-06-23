@@ -6,3 +6,4 @@ bool setConsoleModes();
 bool setConsoleColor();
 void restoreConsoleModes();
 int  getConsoleChar();
+void clearScreen();

@@ -42,6 +42,10 @@ bool setConsoleModes() {
     return true;
 }
 
+void clearScreen() {
+    std::cout << "\x1b[2J";
+}
+
 bool setConsoleColor() {
     hStdin = GetStdHandle(STD_INPUT_HANDLE);
     if (hStdin == INVALID_HANDLE_VALUE) {
@@ -68,7 +72,7 @@ bool setConsoleColor() {
         return false;
     }
 
-    std::cout << "\x1b[2J";  // Clear screen to apply the new colors
+    clearScreen();  // Apply the new colors
     return true;
 }
 

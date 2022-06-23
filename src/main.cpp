@@ -142,8 +142,9 @@ int main(int argc, char** argv) {
     }
     editModeOff();
 
-    std::cout << "Using " << comName << std::endl;
-    std::cout << "Ctrl-C, Ctrl-Q or Ctrl-] to exit, Ctrl-U to upload, Ctrl-R to reset, Ctrl-O to send override" << std::endl;
+    std::cout << "FluidNC " << VERSION << " using " << comName << std::endl;
+    std::cout << "Exit: Ctrl-C, Ctrl-Q or Ctrl-], Clear screen: CTRL-W" << std::endl;
+    std::cout << "Upload: Ctrl-U, Reset ESP32: Ctrl-R, Send Override: Ctrl-O" << std::endl;
 
     // Start a thread to read the serial port and send to the console
     if (!comport.Init(comName.c_str(), 115200)) {
@@ -186,6 +187,9 @@ int main(int argc, char** argv) {
 
             case CTRL(']'):
                 okayExit("Exited by ^]");
+                break;
+            case CTRL('W'):
+                clearScreen();
                 break;
             case CTRL('Q'):
                 okayExit("Exited by ^Q");
