@@ -51,9 +51,8 @@ static const char* getSaveName(const char* proposal) {
     static std::string saveName;
 
     std::cout << "FluidNC filename [" << proposal << "]: ";
-    getline(std::cin, saveName);
+    std::getline(std::cin, saveName);
 
-    //    std::cin >> saveName;
     if (saveName.length() == 0) {
         saveName = proposal;
     }

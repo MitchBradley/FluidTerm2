@@ -280,6 +280,7 @@ bool selectComPort(std::string& comName)  //added function to find the present s
         std::cout << "Choice: ";
         unsigned int choice;
         std::cin >> choice;
+        std::cin.ignore();  // Consume the rest of the line including the newline
         if (choice < choices) {
             comName = "COM" + std::to_string(ports[choice]);
             return true;
