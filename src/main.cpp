@@ -20,7 +20,10 @@ static void errorExit(const char* msg) {
     exit(1);
 }
 
+static SerialPort comport;
+
 static void okayExit(const char* msg) {
+    comport.write("\x0c");  // Send CTRL-L to exit FluidNC echo mode
     std::cerr << msg << std::endl;
     Sleep(1000);
 
@@ -28,8 +31,6 @@ static void okayExit(const char* msg) {
     restoreConsoleModes();
     exit(0);
 }
-
-static SerialPort comport;
 
 static void enableFluidEcho() {
     comport.write("\x1b[C");  // Send right-arrow to enter FluidNC echo mode
