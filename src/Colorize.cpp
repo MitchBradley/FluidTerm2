@@ -25,6 +25,7 @@ static const char* equals_color  = bold_white;
 static const char* purple_color  = bold_magenta;
 static const char* setting_color = bold_cyan;
 static const char* value_color   = bold_yellow;
+static const char* info_color    = bold_yellow;
 
 static void out(char c) {
     std::cout << c;
@@ -84,6 +85,9 @@ void normalColor() {
 }
 void goodColor() {
     out(good_color);
+}
+void infoColor() {
+    out(info_color);
 }
 
 static void colorizeLine(std::string line) {
