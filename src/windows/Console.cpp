@@ -67,7 +67,7 @@ bool setConsoleColor() {
     SetConsoleTextAttribute(hStdout, 0x0f);
 
     // Enable handling of escape sequences on output
-    fdwNewOutMode = ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    fdwNewOutMode = ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING | ENABLE_WRAP_AT_EOL_OUTPUT;
     if (!SetConsoleMode(hStdout, fdwNewOutMode)) {
         return false;
     }
@@ -85,4 +85,12 @@ void restoreConsoleModes() {
 int getConsoleChar() {
     char c;
     return ::ReadFile(hStdin, &c, 1, NULL, NULL) ? c : -1;
+}
+
+bool availConsoleChar() {
+    INPUT_RECORD r;
+    DWORD        n;
+    PeekConsoleInput(hStdin, &r, 1, &n);
+
+    return n > 0;
 }
