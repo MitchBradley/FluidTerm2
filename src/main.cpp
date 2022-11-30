@@ -9,6 +9,7 @@
 #include "FileDialog.h"
 #include "Xmodem.h"
 #include "Console.h"
+#include "SendGCode.h"
 
 static void errorExit(const char* msg) {
     std::cerr << msg << std::endl;
@@ -41,7 +42,7 @@ void resetFluidNC() {
     comport.setRts(true);
     Sleep(500);
     comport.setRts(false);
-    Sleep(2000);
+    Sleep(4000);
     enableFluidEcho();
 }
 
@@ -182,6 +183,25 @@ int main(int argc, char** argv) {
                     if (ret < 0) {
                         std::cout << "Returned " << ret << std::endl;
                     }
+                }
+            } break;
+            case CTRL('G'): {  // ^G
+                const char* path = getFileName();
+                if (*path == '\0') {
+                    std::cout << "No file selected" << std::endl;
+                } else {
+                    infoColor();
+                    std::cout << "Sending " << path << std::endl;
+                    normalColor();
+                    std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
+                    int           ret = sendGCode(comport, infile);
+                    infoColor();
+                    if (ret < 0) {
+                        std::cout << "Sending stopped by error" << std::endl;
+                    } else {
+                        std::cout << "Sending succeeded" << std::endl;
+                    }
+                    normalColor();
                 }
             } break;
 

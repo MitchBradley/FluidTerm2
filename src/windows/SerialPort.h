@@ -25,12 +25,11 @@ private:
     std::string m_commName;
     HANDLE      m_hCommPort;
 
-    void setTimeout(DWORD ms);
-
 public:
     SerialPort();
     virtual ~SerialPort();
 
+    void setTimeout(DWORD ms);
     bool reOpenPort();
 
     void setDirect();

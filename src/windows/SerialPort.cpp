@@ -3,6 +3,7 @@
 #include <assert.h>
 #include "SerialPort.h"
 #include <Process.h>
+#include "Console.h"
 
 #include "Colorize.h"
 
@@ -197,9 +198,13 @@ unsigned __stdcall SerialPort::ThreadFn(void* pvParam) {
                     errorColor();
                     std::cout << "Serial port disconnected - waiting for reconnect" << std::endl;
                     normalColor();
-                    std::cout << "Type Ctrl-] to quit" << std::endl;
+                    std::cout << "Type any key to quit" << std::endl;
                     CloseHandle(apThis->m_hCommPort);
                     while (!apThis->reOpenPort()) {
+                        if (availConsoleChar()) {
+                            restoreConsoleModes();
+                            exit(0);
+                        }
                         Sleep(100);
                     }
                     goodColor();
