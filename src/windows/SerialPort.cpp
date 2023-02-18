@@ -65,6 +65,25 @@ int SerialPort::timedRead(uint32_t ms) {
 void SerialPort::flushInput() {
     while (timedRead(500) >= 0) {}
 }
+#include <strsafe.h>
+
+void ShowError(const char* lpszFunction) {
+    // Retrieve the system error message for the last-error code
+    LPVOID lpMsgBuf;
+    DWORD  dw = GetLastError();
+
+    FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                  NULL,
+                  dw,
+                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                  (LPTSTR)&lpMsgBuf,
+                  0,
+                  NULL);
+
+    // Display the error message and exit the process
+
+    printf("%s failed with error %d: %s", lpszFunction, dw, lpMsgBuf);
+}
 
 bool SerialPort::reOpenPort() {
     //open the COM Port
@@ -112,6 +131,7 @@ bool SerialPort::reOpenPort() {
     dcb.fOutxDsrFlow    = 0;
 
     if (!::SetCommState(m_hCommPort, &dcb)) {
+        ShowError("SetCommState");
         assert(0);
         return false;
     }
