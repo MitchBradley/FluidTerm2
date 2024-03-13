@@ -227,7 +227,7 @@ int xmodemReceive(SerialPort& serial, std::ostream& out) {
     return retval;
 }
 
-static int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
+int xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
     char    xbuff[1030]; /* 1024 for XModem 1k + 3 head chars + 2 crc + nul */
     size_t  bufsz;
     bool    crc      = true;
@@ -341,14 +341,6 @@ static int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
             }
         }
     }
-}
-
-int xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
-    serial.setDirect();
-    int retval = _xmodemTransmit(serial, infile);
-    serial.flushInput();
-    serial.setIndirect();
-    return retval;
 }
 
 #ifdef TEST_XMODEM_RECEIVE

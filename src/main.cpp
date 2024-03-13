@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
     }
     editModeOff();
 
-    std::cout << "FluidNC " << VERSION << " using " << comName << std::endl;
+    std::cout << "FluidTerm " << VERSION << " using " << comName << std::endl;
     std::cout << "Exit: Ctrl-C, Ctrl-Q or Ctrl-], Clear screen: CTRL-W" << std::endl;
     std::cout << "Upload: Ctrl-U, Reset ESP32: Ctrl-R, Send Override: Ctrl-O" << std::endl;
 
@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
         if (c == '\r') {
             c = '\n';
         }
-#define CTRL(N) ((N)&0x1f)
+#define CTRL(N) ((N) & 0x1f)
         switch (c) {
             case CTRL('R'): {
                 resetFluidNC();
@@ -176,12 +176,39 @@ int main(int argc, char** argv) {
                     std::string msg = "$Xmodem/Receive=";
                     msg += remoteName;
                     msg += '\n';
+                    comport.setDirect();
                     comport.write(msg);
-                    Sleep(1000);
-                    std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
-                    int           ret = xmodemTransmit(comport, infile);
-                    if (ret < 0) {
-                        std::cout << "Returned " << ret << std::endl;
+                    int ch;
+                    while (true) {
+                        ch = comport.timedRead(1);
+
+                        if (ch == -1) {
+                        } else if (ch == 'C') {
+                            std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
+                            int           ret = xmodemTransmit(comport, infile);
+                            comport.flushInput();
+                            comport.setIndirect();
+                            if (ret < 0) {
+                                std::cout << "Returned " << ret << std::endl;
+                            }
+                            break;
+                        } else if (ch == '$') {
+                            std::cout << (char)ch;
+                            // FluidNC is echoing the line
+                            do {
+                                ch = comport.timedRead(1);
+                                if (ch != -1) {
+                                    std::cout << (char)ch;
+                                }
+                            } while (ch != '\n');
+                        } else if (ch == '\n') {
+                            std::cout << (char)ch;
+                        } else if (ch == 'e') {
+                            // Probably an "error:N" message
+                            std::cout << (char)ch;
+                            comport.setIndirect();
+                            break;
+                        }
                     }
                 }
             } break;
