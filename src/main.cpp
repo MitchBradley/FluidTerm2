@@ -73,7 +73,7 @@ struct cmd {
     { "dr", 0x86, "DebugReport" },
     { "m0", 0x87, "Macro0" },
     { "m1", 0x88, "Macro1" },
-    { "m2", 0x88, "Macro2" },
+    { "m2", 0x89, "Macro2" },
     { "m3", 0x8a, "Macro3" },
     { "fr", 0x90, "FeedOvrReset" },
     { "f>", 0x91, "FeedOvrCoarsePlus" },
@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
         if (c == '\r') {
             c = '\n';
         }
-#define CTRL(N) ((N) & 0x1f)
+#define CTRL(N) ((N)&0x1f)
         switch (c) {
             case CTRL('R'): {
                 resetFluidNC();
