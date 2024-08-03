@@ -10,6 +10,7 @@
 #include "Xmodem.h"
 #include "Console.h"
 #include "SendGCode.h"
+#include <unistd.h>
 
 static void errorExit(const char* msg) {
     std::cerr << msg << std::endl;
@@ -126,7 +127,111 @@ void sendOverride() {
     }
 }
 
+void uploadFile(const std::string& path, const std::string& remoteName) {
+    std::cout << "XModem Upload " << path << " " << remoteName << std::endl;
+    std::string msg = "$Xmodem/Receive=";
+    msg += remoteName;
+    msg += '\n';
+    comport.setDirect();
+    comport.write(msg);
+    int ch;
+    while (true) {
+        ch = comport.timedRead(1);
+
+        if (ch == -1) {
+        } else if (ch == 'C') {
+            std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
+            if (infile.fail()) {
+                std::cout << "Can't open " << path << std::endl;
+            }
+            int ret = xmodemTransmit(comport, infile);
+            comport.flushInput();
+            comport.setIndirect();
+            if (ret < 0) {
+                std::cout << "Returned " << ret << std::endl;
+            }
+            break;
+        } else if (ch == '$') {
+            std::cout << (char)ch;
+            // FluidNC is echoing the line
+            do {
+                ch = comport.timedRead(1);
+                if (ch != -1) {
+                    std::cout << (char)ch;
+                }
+            } while (ch != '\n');
+        } else if (ch == '\n') {
+            std::cout << (char)ch;
+        } else if (ch == 'e') {
+            // Probably an "error:N" message
+            std::cout << (char)ch;
+            comport.setIndirect();
+            break;
+        }
+    }
+}
+
+const char* uploadpath = nullptr;
+
 int main(int argc, char** argv) {
+    std::string comName;
+    std::string uploadName;
+    std::string remoteName;
+
+    opterr = 0;
+    int c;
+    while ((c = getopt(argc, argv, "p:u:r:")) != -1) {
+        switch (c) {
+            case 'p':
+                comName = optarg;
+                break;
+            case 'u':
+                uploadName = optarg;
+                break;
+            case 'r':
+                remoteName = optarg;
+                break;
+            case '?':
+                if (optopt == 'p' || optopt == 'u' || optopt == 'd')
+                    fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+                else if (isprint(optopt))
+                    fprintf(stderr, "Unknown option `-%c'.\n", optopt);
+                else
+                    fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
+                return 1;
+            default:
+                abort();
+        }
+    }
+    for (int index = optind; index < argc; index++)
+        printf("Non-option argument %s\n", argv[index]);
+
+    editModeOn();
+    if (comName.length() == 0 && !selectComPort(comName)) {
+        editModeOff();
+        errorExit("No COM port found");
+    }
+    editModeOff();
+
+    // Start a thread to read the serial port and send to the console
+    if (!comport.Init(comName.c_str(), 115200)) {
+        std::string errorstr("Cannot open ");
+        errorstr += comName;
+        errorExit(errorstr.c_str());
+    }
+
+    if (uploadName.length()) {
+        if (remoteName.length()) {
+            if (remoteName.back() == '/') {
+                remoteName += fileTail(uploadName.c_str());
+            }
+        } else {
+            remoteName = fileTail(uploadName.c_str());
+        }
+        uploadFile(uploadName, remoteName);
+        okayExit("Done");
+    }
+
     if (!setConsoleColor()) {
         errorExit("setConsoleColor failed");
     }
@@ -135,22 +240,9 @@ int main(int argc, char** argv) {
         errorExit("setConsoleModes failed");
     }
 
-    std::string comName;
-    editModeOn();
-    if (!selectComPort(comName)) {
-        editModeOff();
-        errorExit("No COM port found");
-    }
-    editModeOff();
-
     std::cout << "FluidTerm " << VERSION << " using " << comName << std::endl;
     std::cout << "Exit: Ctrl-C, Ctrl-Q or Ctrl-], Clear screen: CTRL-W" << std::endl;
     std::cout << "Upload: Ctrl-U, Reset ESP32: Ctrl-R, Send Override: Ctrl-O" << std::endl;
-
-    // Start a thread to read the serial port and send to the console
-    if (!comport.Init(comName.c_str(), 115200)) {
-        errorExit("Cannot open serial port");
-    }
 
     enableFluidEcho();
 
@@ -172,44 +264,7 @@ int main(int argc, char** argv) {
                     std::cout << "No file selected" << std::endl;
                 } else {
                     const char* remoteName = getSaveName(fileTail(path));
-                    std::cout << "XModem Upload " << path << " " << remoteName << std::endl;
-                    std::string msg = "$Xmodem/Receive=";
-                    msg += remoteName;
-                    msg += '\n';
-                    comport.setDirect();
-                    comport.write(msg);
-                    int ch;
-                    while (true) {
-                        ch = comport.timedRead(1);
-
-                        if (ch == -1) {
-                        } else if (ch == 'C') {
-                            std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
-                            int           ret = xmodemTransmit(comport, infile);
-                            comport.flushInput();
-                            comport.setIndirect();
-                            if (ret < 0) {
-                                std::cout << "Returned " << ret << std::endl;
-                            }
-                            break;
-                        } else if (ch == '$') {
-                            std::cout << (char)ch;
-                            // FluidNC is echoing the line
-                            do {
-                                ch = comport.timedRead(1);
-                                if (ch != -1) {
-                                    std::cout << (char)ch;
-                                }
-                            } while (ch != '\n');
-                        } else if (ch == '\n') {
-                            std::cout << (char)ch;
-                        } else if (ch == 'e') {
-                            // Probably an "error:N" message
-                            std::cout << (char)ch;
-                            comport.setIndirect();
-                            break;
-                        }
-                    }
+                    uploadFile(path, remoteName);
                 }
             } break;
             case CTRL('G'): {  // ^G
