@@ -139,6 +139,11 @@ void uploadFile(const std::string& path, const std::string& remoteName) {
         ch = comport.timedRead(1);
 
         if (ch == -1) {
+        } else if (ch == 0x18 || ch == 0x04) {
+            // 0x18 is the correct cancel character but older FluidNC versions use 0x04
+            std::cout << "FluidNC cancelled the upload" << std::endl;
+            comport.setIndirect();
+            break;
         } else if (ch == 'C') {
             std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
             if (infile.fail()) {
@@ -253,7 +258,7 @@ int main(int argc, char** argv) {
         if (c == '\r') {
             c = '\n';
         }
-#define CTRL(N) ((N)&0x1f)
+#define CTRL(N) ((N) & 0x1f)
         switch (c) {
             case CTRL('R'): {
                 resetFluidNC();
