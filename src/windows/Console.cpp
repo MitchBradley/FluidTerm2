@@ -78,7 +78,7 @@ bool setConsoleColor() {
 
 void restoreConsoleModes() {
     SetConsoleMode(hStdout, fdwOldOutMode);
-    SetConsoleMode(hStdout, fdwOldInMode);
+    SetConsoleMode(hStdin, fdwOldInMode);
     SetConsoleTextAttribute(hStdout, wOldColorAttrs);
 }
 

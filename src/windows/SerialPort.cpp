@@ -4,6 +4,7 @@
 #include "SerialPort.h"
 #include <Process.h>
 #include "Console.h"
+#include <stdio.h>
 
 #include "Colorize.h"
 
@@ -13,9 +14,15 @@
 
 void SerialPort::setTimeout(DWORD ms) {
     COMMTIMEOUTS timeouts;
-    timeouts.ReadIntervalTimeout         = 0;
-    timeouts.ReadTotalTimeoutMultiplier  = 0;
-    timeouts.ReadTotalTimeoutConstant    = ms;
+    if (ms) {
+        timeouts.ReadIntervalTimeout        = 0;
+        timeouts.ReadTotalTimeoutMultiplier = 0;
+        timeouts.ReadTotalTimeoutConstant   = ms;
+    } else {
+        timeouts.ReadIntervalTimeout        = MAXDWORD;
+        timeouts.ReadTotalTimeoutMultiplier = 0;
+        timeouts.ReadTotalTimeoutConstant   = 0;
+    }
     timeouts.WriteTotalTimeoutMultiplier = 0;
     timeouts.WriteTotalTimeoutConstant   = 0;
 
@@ -48,7 +55,7 @@ void SerialPort::setDirect() {
     m_direct = true;
 }
 void SerialPort::setIndirect() {
-    setTimeout(10);
+    setTimeout(0);
     m_direct = false;
 }
 int SerialPort::timedRead(uint32_t ms) {
@@ -61,6 +68,18 @@ int SerialPort::timedRead(uint32_t ms) {
     }
 
     return dwBytesRead == 1 ? c : -1;
+}
+int SerialPort::timedRead(uint8_t* buf, size_t len, uint32_t ms) {
+    setTimeout(ms);
+    char  c;
+    DWORD dwBytesRead;
+    ::ReadFile(m_hCommPort, buf, len, &dwBytesRead, NULL);
+    if (dwBytesRead != len) {
+        fprintf(stderr, "Asked for %d, got %d\n", len, dwBytesRead);
+        // std::cout << '.';
+    }
+
+    return dwBytesRead;
 }
 void SerialPort::flushInput() {
     while (timedRead(500) >= 0) {}
@@ -135,7 +154,7 @@ bool SerialPort::reOpenPort() {
         assert(0);
         return false;
     }
-    setTimeout(10);
+    setTimeout(0);
 
     return true;
 }
@@ -174,6 +193,48 @@ bool SerialPort::Init(std::string portName, DWORD dwBaudRate, BYTE byParity, BYT
     return true;
 }
 
+void SerialPort::getMode(DWORD& dwBaudRate, BYTE& byByteSize, BYTE& byParity, BYTE& byStopBits) {
+    dwBaudRate = m_baud;
+    byByteSize = m_dataBits;
+    byParity   = m_parity;
+    byStopBits = m_stopBits;
+}
+
+bool SerialPort::setMode(DWORD dwBaudRate, BYTE byByteSize, BYTE byParity, BYTE byStopBits) {
+    m_baud     = dwBaudRate;
+    m_dataBits = byByteSize;
+    m_parity   = byParity;
+    m_stopBits = byStopBits;
+
+    DCB dcb       = { 0 };
+    dcb.DCBlength = sizeof(DCB);
+    if (!::GetCommState(m_hCommPort, &dcb)) {
+        return false;
+    }
+
+    dcb.BaudRate = m_baud;
+    dcb.ByteSize = m_dataBits;
+    dcb.Parity   = m_parity;
+    switch (m_stopBits) {
+        case 1:
+            dcb.StopBits = ONESTOPBIT;
+            break;
+        case 2:
+            dcb.StopBits = TWOSTOPBITS;
+            break;
+        default:
+            dcb.StopBits = ONE5STOPBITS;
+            break;
+    }
+
+    if (!::SetCommState(m_hCommPort, &dcb)) {
+        ShowError("SetCommState");
+        assert(0);
+        return false;
+    }
+    return true;
+}
+
 void SerialPort::setRts(bool on) {
     DCB dcb       = { 0 };
     dcb.DCBlength = sizeof(DCB);
@@ -197,6 +258,7 @@ void SerialPort::setDtr(bool on) {
 unsigned __stdcall SerialPort::ThreadFn(void* pvParam) {
     SerialPort* apThis     = (SerialPort*)pvParam;
     bool        abContinue = true;
+    HANDLE      hStdout    = GetStdHandle(STD_OUTPUT_HANDLE);
 
     SetEvent(apThis->m_hThreadStarted);
     while (1) {

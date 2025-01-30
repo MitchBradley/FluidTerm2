@@ -8,6 +8,7 @@
 #include "SerialPort.h"
 #include "FileDialog.h"
 #include "Xmodem.h"
+#include "stm32loader/stm32action.h"
 #include "Console.h"
 #include "SendGCode.h"
 #include <unistd.h>
@@ -127,10 +128,30 @@ void sendOverride() {
     }
 }
 
+__int64 FileSize(const char* name) {
+    WIN32_FILE_ATTRIBUTE_DATA fad;
+    if (!GetFileAttributesEx(name, GetFileExInfoStandard, &fad))
+        return -1;  // error condition, could call GetLastError to find out more
+    LARGE_INTEGER size;
+    size.HighPart = fad.nFileSizeHigh;
+    size.LowPart  = fad.nFileSizeLow;
+    return size.QuadPart;
+}
+
 void uploadFile(const std::string& path, const std::string& remoteName) {
+    std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
+    if (infile.fail()) {
+        std::cout << "Can't open " << path << std::endl;
+        return;
+    }
+    // auto size = std::filesystem::file_size(path);
+    int size = FileSize(path.c_str());
     std::cout << "XModem Upload " << path << " " << remoteName << std::endl;
+
     std::string msg = "$Xmodem/Receive=";
     msg += remoteName;
+    //    msg += ':';
+    //    msg += std::to_string(size);
     msg += '\n';
     comport.setDirect();
     comport.write(msg);
@@ -145,10 +166,6 @@ void uploadFile(const std::string& path, const std::string& remoteName) {
             comport.setIndirect();
             break;
         } else if (ch == 'C') {
-            std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
-            if (infile.fail()) {
-                std::cout << "Can't open " << path << std::endl;
-            }
             int ret = xmodemTransmit(comport, infile);
             comport.flushInput();
             comport.setIndirect();
@@ -247,7 +264,7 @@ int main(int argc, char** argv) {
 
     std::cout << "FluidTerm " << VERSION << " using " << comName << std::endl;
     std::cout << "Exit: Ctrl-C, Ctrl-Q or Ctrl-], Clear screen: CTRL-W" << std::endl;
-    std::cout << "Upload: Ctrl-U, Reset ESP32: Ctrl-R, Send Override: Ctrl-O" << std::endl;
+    std::cout << "Upload: Ctrl-U, Reset ESP32: Ctrl-R, Send Override: Ctrl-O, STM32 Loader: Ctrl-S" << std::endl;
 
     enableFluidEcho();
 
@@ -258,10 +275,18 @@ int main(int argc, char** argv) {
         if (c == '\r') {
             c = '\n';
         }
-#define CTRL(N) ((N) & 0x1f)
+#define CTRL(N) ((N)&0x1f)
         switch (c) {
             case CTRL('R'): {
                 resetFluidNC();
+            } break;
+            case CTRL('S'): {  // ^S  STMLoader Actions
+                editModeOn();
+                static std::string command;
+                std::cout << "STM32 Loader Command: ";
+                std::getline(std::cin, command);
+                editModeOff();
+                stm32action(comport, command);
             } break;
             case CTRL('U'): {  // ^U
                 const char* path = getFileName();

@@ -35,6 +35,7 @@ public:
     void setDirect();
     void setIndirect();
     int  timedRead(uint32_t ms);
+    int  timedRead(uint8_t* buf, size_t len, uint32_t ms);
 
     void flushInput();
 
@@ -42,6 +43,8 @@ public:
     HRESULT write(std::string s) { return write(s.c_str(), s.length()); }
     void    write(char data) { write(&data, 1); }
     bool    Init(std::string szPortName = "COM1", DWORD dwBaudRate = 115200, BYTE byParity = 0, BYTE byStopBits = 1, BYTE byByteSize = 8);
+    void    getMode(DWORD& dwBaudRate, BYTE& byByteSize, BYTE& byParity, BYTE& byStopBits);
+    bool    setMode(DWORD dwBaudRate, BYTE byByteSize, BYTE byParity, BYTE byStopBits);
 
     void setRts(bool on);
     void setDtr(bool on);
