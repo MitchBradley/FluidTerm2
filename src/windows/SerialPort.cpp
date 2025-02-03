@@ -74,13 +74,19 @@ int SerialPort::timedRead(uint8_t* buf, size_t len, uint32_t ms) {
     char  c;
     DWORD dwBytesRead;
     ::ReadFile(m_hCommPort, buf, len, &dwBytesRead, NULL);
+#if 0
     if (dwBytesRead != len) {
         fprintf(stderr, "Asked for %d, got %d\n", len, dwBytesRead);
         // std::cout << '.';
     }
+#endif
 
     return dwBytesRead;
 }
+int SerialPort::timedRead(char* buf, size_t len, uint32_t ms) {
+    return timedRead((uint8_t*)buf, len, ms);
+}
+
 void SerialPort::flushInput() {
     while (timedRead(500) >= 0) {}
 }
@@ -160,6 +166,7 @@ bool SerialPort::reOpenPort() {
 }
 
 bool SerialPort::Init(std::string portName, DWORD dwBaudRate, BYTE byParity, BYTE byStopBits, BYTE byByteSize) {
+    m_portName = portName;
     m_baud     = dwBaudRate;
     m_parity   = byParity;
     m_stopBits = byStopBits;
@@ -211,7 +218,6 @@ bool SerialPort::setMode(DWORD dwBaudRate, BYTE byByteSize, BYTE byParity, BYTE 
     if (!::GetCommState(m_hCommPort, &dcb)) {
         return false;
     }
-
     dcb.BaudRate = m_baud;
     dcb.ByteSize = m_dataBits;
     dcb.Parity   = m_parity;

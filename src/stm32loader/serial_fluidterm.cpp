@@ -33,20 +33,56 @@ static uint8_t       saved_data_bits;
 static uint8_t       saved_parity;
 static uint8_t       saved_stop_bits;
 
+static bool passthrough = false;
+
 // cppcheck-suppress unusedFunction
-static port_err_t serial_open(SerialPort* serial) {
+static port_err_t serial_open(struct port_interface* port, struct port_options* ops) {
+    port->priv = ops->extra;
+    auto h     = (SerialPort*)port->priv;
+    h->setDirect();
+    passthrough = strcmp(ops->device, "direct") != 0;
+    if (passthrough) {
+        char buf[256];
+        sprintf(buf, "$Uart/Passthrough=%s\n", ops->device);
+        h->write(buf);
+        char*  bufp = buf;
+        size_t len;
+        bool   is_error = false;
+        do {
+            len      = h->timedRead(bufp, 256, 500);
+            buf[len] = '\0';
+            if (len) {
+                fprintf(stderr, "< %s\n", buf);
+            }
+            if (strncasecmp(buf, "error:", 6) == 0) {
+                is_error = true;
+            }
+        } while (len);
+        if (is_error) {
+            h->setIndirect();
+            return PORT_ERR_UNKNOWN;
+        }
+    } else {
+        fprintf(stderr, "Connecting to STM32 on %s\n", h->m_portName.c_str());
+        h->getMode(saved_baudrate, saved_data_bits, saved_parity, saved_stop_bits);
+        const char* mode      = ops->serial_mode;
+        uint8_t     data_bits = mode[0] - '0';
+        uint8_t     parity    = mode[1] == 'e' ? 2 : (mode[1] == 'o' ? 1 : 0);
+        uint8_t     stop_bits = mode[2] - '0';
+
+        h->setMode(ops->baudRate, data_bits, parity, stop_bits);
+    }
     return PORT_ERR_OK;
 }
 
 // cppcheck-suppress unusedFunction
-static void serial_flush(const serial_t* h) {}
-
-// cppcheck-suppress unusedFunction
 static port_err_t serial_close(struct port_interface* port) {
     auto h = (SerialPort*)port->priv;
+    if (!passthrough) {
+        h->setMode(saved_baudrate, saved_data_bits, saved_parity, saved_stop_bits);
+    }
     h->setIndirect();
-    h->setMode(saved_baudrate, saved_data_bits, saved_parity, saved_stop_bits);
-    port->priv = NULL;
+
     return PORT_ERR_OK;
 }
 
@@ -123,27 +159,12 @@ static const char* serial_get_cfg_str(struct port_interface* port) {
     return h ? "FluidNC" : "INVALID";
 }
 
+// cppcheck-suppress unusedFunction
 static port_err_t serial_flush(struct port_interface* port) {
     auto h = (SerialPort*)port->priv;
     if (h == NULL) {
         return PORT_ERR_UNKNOWN;
     }
-
-    return PORT_ERR_OK;
-}
-
-static port_err_t serial_open(struct port_interface* port, struct port_options* ops) {
-    auto h = (SerialPort*)ops->device;
-    h->setDirect();
-    port->priv = (void*)h;
-
-    h->getMode(saved_baudrate, saved_data_bits, saved_parity, saved_stop_bits);
-    const char* mode      = ops->serial_mode;
-    uint8_t     data_bits = mode[0] - '0';
-    uint8_t     parity    = mode[1] == 'e' ? 2 : (mode[1] == 'o' ? 1 : 9);
-    uint8_t     stop_bits = mode[2] - '0';
-
-    h->setMode(ops->baudRate, data_bits, parity, stop_bits);
 
     return PORT_ERR_OK;
 }

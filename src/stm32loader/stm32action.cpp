@@ -29,10 +29,10 @@ struct port_interface* port   = NULL;
 
 /* settings */
 struct port_options port_opts = {
-    .device = NULL,
+    .device = "auto",
     //    .baudRate     = SERIAL_BAUD_115200,
     .baudRate     = 115200,
-    .serial_mode  = "8e1",
+    .serial_mode  = "8n1",
     .bus_addr     = 0,
     .rx_frame_max = STM32_MAX_RX_FRAME,
     .tx_frame_max = STM32_MAX_TX_FRAME,
@@ -602,14 +602,14 @@ close:
 
 void show_help(char* name);
 int  parse_options(int argc, char* argv[]) {
-     int   c;
-     char* pLen;
+    int   c;
+    char* pLen;
 
-     init_options();
+    init_options();
 #if 0
      const char* opts = "a:b:m:r:w:e:vhn:g:jkfcChuos:S:F:i:R";
 #else
-    const char* opts = "b:m:r:w:e:vhn:g:jkfcChuos:S:F:R";
+    const char* opts = "p:b:m:r:w:e:vhn:g:jkfcChuos:S:F:R";
 #endif
     optind = 1;  // Because parse_options can be called multiple times
     action = ACT_NONE;
@@ -618,6 +618,9 @@ int  parse_options(int argc, char* argv[]) {
             break;
         }
         switch (c) {
+            case 'p':
+                port_opts.device = strdup(optarg);
+                break;
 #if 0
              case 'a':
                 port_opts.bus_addr = strtoul(optarg, NULL, 0);
@@ -816,6 +819,7 @@ int  parse_options(int argc, char* argv[]) {
         }
     }
 
+#if 0
     for (c = optind; c < argc; ++c) {
         if (port_opts.device) {
             fprintf(stderr, "ERROR: Invalid parameter specified\n");
@@ -830,6 +834,13 @@ int  parse_options(int argc, char* argv[]) {
         show_help(argv[0]);
         return 1;
     }
+#else
+    if (optind != argc) {
+        fprintf(stderr, "ERROR: Invalid parameter specified\n");
+        show_help(argv[0]);
+        return 1;
+    }
+#endif
 
     if ((action != ACT_WRITE) && verify) {
         fprintf(stderr, "ERROR: Invalid usage, -v is only valid when writing\n");
@@ -918,7 +929,8 @@ void show_help(char* name) {
             name,
             name);
 #else
-            "Usage: [-CujkoevngSFsfhcR] [-[rw] filename]\n"
+            "Usage: [-pCujkoevngSFsfhcR] [-[rw] filename]\n"
+            "	-p [auto|uartN|direct]	Select port (default auto)\n"
             "	-r filename	Read flash to file\n"
             "	-w filename	Write flash from file\n"
             "	-C		Compute CRC of flash content\n"
@@ -943,17 +955,26 @@ void show_help(char* name) {
             "	-b rate		Baud rate (default 115200)\n"
             "	-m mode		Serial port mode (default 8e1)\n"
             "\n"
+            "Port choices (applies to all commands):\n"
+            "   -p auto   (default) FluidNC automatically selects uart\n"
+            "             based on the config file\n"
+            "   -p uartN  Use FluidNC uartN (N=1,2,3,4)\n"
+            ""
             "Examples:\n"
-            "	Get device information:\n"
-            "		<nothing>\n"
+            "	Get device information using uart chosen by FluidNC:\n"
+            "		-p auto   (or empty command)\n"
+            "	Get device information via FluidNC uart2:\n"
+            "		-p uart2\n"
+            "	Write file to STM32 Flash:\n"
+            "		[-p port] -w filename\n"
             "	Write with verify and then start execution:\n"
-            "		-w filename -v -g 0x0\n"
-            "	Read flash to file:\n"
-            "		-r filename\n"
+            "		[-p port] -w filename -v -g 0x0\n"
+            "	Read STM32 Flash to file:\n"
+            "		[-p port] -r filename\n"
             "	Read 100 bytes of flash from 0x08001000\n"
-            "		-r filename -S 0x1000:100\n"
+            "		[-p port] -r filename -S 0x1000:100\n"
             "	Start execution:\n"
-            "		-g 0x0\n");
+            "		[-p port] -g 0x0\n");
 #endif
 }
 
@@ -962,7 +983,7 @@ void show_help(char* name) {
 #include "stm32action.h"
 #include <../windows/SerialPort.h>
 int stm32action(SerialPort& port, std::string cmd) {
-    port_opts.device = (char*)&port;
+    port_opts.extra = &port;
     std::vector<char*> argv_vector;
     cmd       = "stmloader " + cmd;
     char* str = new char[cmd.size() + 1];

@@ -29,15 +29,19 @@ public:
     SerialPort();
     virtual ~SerialPort();
 
-    void setTimeout(DWORD ms);
+    std::string m_portName;
+
     bool reOpenPort();
 
     void setDirect();
     void setIndirect();
     int  timedRead(uint32_t ms);
     int  timedRead(uint8_t* buf, size_t len, uint32_t ms);
+    int  timedRead(char* buf, size_t len, uint32_t ms);
 
     void flushInput();
+
+    void setTimeout(DWORD ms);
 
     HRESULT write(const char* data, DWORD dwSize);
     HRESULT write(std::string s) { return write(s.c_str(), s.length()); }

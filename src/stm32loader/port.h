@@ -42,6 +42,7 @@ struct port_options {
     int           bus_addr;
     int           rx_frame_max;
     int           tx_frame_max;
+    void*         extra;
 };
 
 /*

@@ -369,7 +369,7 @@ static stm32_err_t stm32_send_init_seq(const stm32_t* stm) {
         return STM32_ERR_OK;
     }
     if (p_err != PORT_ERR_TIMEDOUT) {
-        fprintf(stderr, "Failed to init device.\n");
+        fprintf(stderr, "Failed to init device - timeout.\n");
         return STM32_ERR_UNKNOWN;
     }
 
