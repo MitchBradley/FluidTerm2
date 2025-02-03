@@ -666,7 +666,6 @@ int  parse_options(int argc, char* argv[]) {
                 }
                 action   = (c == 'r') ? ACT_READ : ACT_WRITE;
                 filename = optarg;
-                fprintf(stderr, "Filename %s\n", filename);
                 if (filename[0] == '-' && filename[1] == '\0') {
                     use_stdinout = 1;
                     force_binary = 1;
