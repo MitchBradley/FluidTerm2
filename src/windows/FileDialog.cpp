@@ -1,7 +1,7 @@
 #include <windows.h>
 #include <string>
 
-const char* getFileName() {
+const char* getFileName(const char* filter, bool save) {
     static OPENFILENAMEA ofn;          // common dialog box structure
     static char          szFile[260];  // buffer for file name
     HANDLE               hf;           // file handle
@@ -15,21 +15,17 @@ const char* getFileName() {
     // use the contents of szFile to initialize itself.
     ofn.lpstrFile[0]   = '\0';
     ofn.nMaxFile       = sizeof(szFile);
-    ofn.lpstrFilter    = "All\0*.*\0FluidNC Config\0*.yaml,*.flnc\0";
+    ofn.lpstrFilter    = filter;
     ofn.nFilterIndex   = 1;
     ofn.lpstrFileTitle = NULL;
     ofn.nMaxFileTitle  = 0;
 
     ofn.lpstrInitialDir = NULL;
-    ofn.Flags           = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+    ofn.Flags           = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_OVERWRITEPROMPT;
 
     // Display the Open dialog box.
-
-    if (GetOpenFileNameA(&ofn)) {
-        return szFile;
-    } else {
-        return "";
-    }
+    BOOL res = save ? GetSaveFileNameA(&ofn) : GetOpenFileNameA(&ofn);
+    return res ? szFile : "";
 }
 const char* fileTail(const char* path) {
     const char* endp = path + strlen(path);

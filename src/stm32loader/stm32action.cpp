@@ -20,6 +20,7 @@
 #if defined(__WIN32__) || defined(__CYGWIN__)
 #    include <windows.h>
 #endif
+#include "../windows/FileDialog.h"
 
 /* device globals */
 stm32_t*               stm    = NULL;
@@ -53,7 +54,7 @@ int          use_stdinout = 0;
 char         force_binary = 0;
 FILE*        diag;
 char         reset_flag = 0;
-char*        filename;
+const char*  filename;
 char*        gpio_seq      = NULL;
 uint32_t     start_addr    = 0;
 uint32_t     readwrite_len = 0;
@@ -609,7 +610,7 @@ int  parse_options(int argc, char* argv[]) {
 #if 0
      const char* opts = "a:b:m:r:w:e:vhn:g:jkfcChuos:S:F:i:R";
 #else
-    const char* opts = "p:b:m:r:w:e:vhn:g:jkfcChuos:S:F:R";
+    const char* opts = "p:b:m:rwe:vhn:g:jkfcChuos:S:F:R";
 #endif
     optind = 1;  // Because parse_options can be called multiple times
     action = ACT_NONE;
@@ -660,16 +661,28 @@ int  parse_options(int argc, char* argv[]) {
 
             case 'r':
             case 'w':
-                if (action != ACT_NONE) {
-                    err_multi_action((c == 'r') ? ACT_READ : ACT_WRITE);
-                    return 1;
-                }
-                action   = (c == 'r') ? ACT_READ : ACT_WRITE;
+#if 0
                 filename = optarg;
                 if (filename[0] == '-' && filename[1] == '\0') {
                     use_stdinout = 1;
                     force_binary = 1;
                 }
+#else
+                if (c == 'w') {
+                    filename = getFileName("Bin or Hex\0*.bin;*.hex\0All Files\0*.*\0\0", false);
+                } else {
+                    filename = getFileName("Binary\0*.bin\0All Files\0*.*\0\0", true);
+                }
+                if (*filename == '\0') {
+                    fprintf(stderr, "No file selected\n");
+                    return 1;
+                }
+#endif
+                if (action != ACT_NONE) {
+                    err_multi_action((c == 'r') ? ACT_READ : ACT_WRITE);
+                    return 1;
+                }
+                action = (c == 'r') ? ACT_READ : ACT_WRITE;
                 break;
             case 'e':
                 if (readwrite_len || start_addr) {

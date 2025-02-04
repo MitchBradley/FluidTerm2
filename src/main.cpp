@@ -275,7 +275,7 @@ int main(int argc, char** argv) {
         if (c == '\r') {
             c = '\n';
         }
-#define CTRL(N) ((N)&0x1f)
+#define CTRL(N) ((N) & 0x1f)
         switch (c) {
             case CTRL('R'): {
                 resetFluidNC();
@@ -289,7 +289,7 @@ int main(int argc, char** argv) {
                 stm32action(comport, command);
             } break;
             case CTRL('U'): {  // ^U
-                const char* path = getFileName();
+                const char* path = getFileName("FluidNC\0*.yaml;*.flnc;*.gz\0All\0*.*\0");
                 if (*path == '\0') {
                     std::cout << "No file selected" << std::endl;
                 } else {
@@ -298,7 +298,7 @@ int main(int argc, char** argv) {
                 }
             } break;
             case CTRL('G'): {  // ^G
-                const char* path = getFileName();
+                const char* path = getFileName("GCode\0*.gc;*.gcode;*.nc\0All\0*.*\0");
                 if (*path == '\0') {
                     std::cout << "No file selected" << std::endl;
                 } else {
