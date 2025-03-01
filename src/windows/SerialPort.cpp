@@ -324,7 +324,11 @@ HRESULT SerialPort::write(const char* data, DWORD dwSize) {
 
     iRet = WriteFile(m_hCommPort, data, dwSize, &dwBytesWritten, &ov);
     if (iRet == 0) {
-        WaitForSingleObject(ov.hEvent, INFINITE);
+        if (GetLastError() == ERROR_BAD_COMMAND) {
+            fprintf(stderr, "Write to serial port failed; exiting\n");
+            exit(0);
+        }
+        WaitForSingleObject(ov.hEvent, 1000);
     }
 
     CloseHandle(ov.hEvent);
