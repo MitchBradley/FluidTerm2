@@ -30,6 +30,9 @@ static void okayExit(const char* msg) {
     std::cerr << msg << std::endl;
     Sleep(1000);
 
+    comport.setRts(false);
+    comport.setDtr(false);
+
     // Restore input mode on exit.
     restoreConsoleModes();
     exit(0);
@@ -39,13 +42,84 @@ static void enableFluidEcho() {
     comport.write("\x1b[C");  // Send right-arrow to enter FluidNC echo mode
 }
 
+void resetToDownload() {
+    comport.lock();
+
+    // Initially RTS and DTR are true, so their hardware lines are 0, and EN and BOOT0 are 1
+    comport.setRtsDtr(true, false);  // RTS true (hw 0)  and DTR false (hw 1) sets EN to hw 0
+    Sleep(10);
+    comport.setRtsDtr(false, true);  // RTS false (hw 1) and DTR true (hw 0)  sets BOOT0 to hw 0
+                                     // and EN goes to 1 after an RC delay, sampling BOOT0 as 0
+    Sleep(100);                      // Give the EN time to go to 1 before releasing BOOT0
+    comport.setRtsDtr(true, true);   // Back to normal
+
+    comport.unlock();
+}
+
 void resetFluidNC() {
     std::cout << "Resetting MCU" << std::endl;
-    comport.setRts(true);
-    Sleep(500);
+    comport.lock();
+    // Idle state is DTR true, RTS true, so both low at the hardware level
+
+    comport.setRtsDtr(false, false);  // RTS false (hw 0)  and DTR false (hw 1) leaves EN and BOOT0 at 1
+    Sleep(10);
+    // Since we always leave RTS and DTR true (hardware 0), so EN and BOOT0
+    // are both high, this simple sequence suffices.
+    comport.setRtsDtr(true, false);  // RTS is true (hw 0) and DTR goes false (hw 1), driving EN low
+    Sleep(10);
+    comport.setRtsDtr(true, true);  // DTR goes back to true (hw 0), releasing EN
+    Sleep(10);
+    comport.setRtsDtr(false, false);  // DTR goes back to true (hw 0), releasing EN
+    Sleep(10);
+    comport.setRtsDtr(true, true);  // DTR goes back to true (hw 0), releasing EN
+
+#if CDC_ACM_SEQUENCE
+    // Sequence recommended for CDC-ACM engine in ESP32-S3
+    comport.setDtr(false);
+    Sleep(2);
     comport.setRts(false);
-    Sleep(4000);
-    enableFluidEcho();
+    Sleep(2);
+    comport.setRts(true);
+    Sleep(2);
+    comport.setDtr(true);
+#endif
+
+#if ESPTOOL_CLASSIC_SEQUENCE
+    // Sequence cribbed from esptool using separate setRts and setDtr
+    comport.setRts(false);
+    comport.setDtr(false);  // Idle
+    Sleep(100);
+    comport.setDtr(true);  // Set IO0
+    comport.setRts(false);
+    Sleep(100);
+    comport.setRts(true);  // Reset. Calls inverted to go through (1,1) instead of (0,0)
+    comport.setDtr(false);
+    comport.setRts(true);  // RTS set as Windows only propagates DTR on RTS setting
+    Sleep(100);
+    comport.setDtr(false);
+    comport.setRts(false);  // Chip out of reset
+    Sleep(100);
+    // Addition to return to Rts and Dtr active as expected by USB CDC
+    comport.setDtr(true);
+    comport.setRts(true);  // Normal
+#endif
+#if ESPTOOL_TIGHT_SEQUENCE
+    // Sequence cribbed from esptool using combined setRtsDtr
+    comport.setRtsDtr(false, false);  // Idle
+    Sleep(100);
+    comport.setRtsDtr(false, true);  // Set IO0
+    Sleep(20);
+    comport.setRtsDtr(true, false);  // Reset. Calls inverted to go through (1,1) instead of (0,0)
+    Sleep(30);
+    comport.setRtsDtr(false, false);  // Chip out of reset
+    comport.setDtr(false);            // Needed in some environments to ensure IO0=HIGH
+    // Addition to return to Rts and Dtr active as expected by USB CDC
+    Sleep(40);
+    comport.setRtsDtr(true, true);
+#endif
+    comport.unlock();
+    //    enableFluidEcho();
+    std::cout << "Resetting Done" << std::endl;
 }
 
 static const char* getSaveName(const char* proposal) {
@@ -275,8 +349,24 @@ int main(int argc, char** argv) {
         if (c == '\r') {
             c = '\n';
         }
-#define CTRL(N) ((N) & 0x1f)
+#define CTRL(N) ((N)&0x1f)
         switch (c) {
+            case CTRL('N'):
+                std::cout << "Download" << std::endl;
+                resetToDownload();
+                break;
+            case CTRL('D'):
+                comport.setDtr(true);
+                break;
+            case CTRL('E'):
+                comport.setDtr(false);
+                break;
+            case CTRL('F'):
+                comport.setRts(true);
+                break;
+            case CTRL('L'):
+                comport.setRts(false);
+                break;
             case CTRL('R'): {
                 resetFluidNC();
             } break;

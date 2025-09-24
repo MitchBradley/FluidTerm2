@@ -118,8 +118,8 @@ void expectEcho() {
 
 void colorizeOutput(const char* buf, size_t len) {
     //    out('{');    out(residue);     out('}');
-    std::string next(buf, len);
-    residue += next;
+
+    residue += std::string_view(buf, len);
 
     std::istringstream lines(residue);
     residue.clear();

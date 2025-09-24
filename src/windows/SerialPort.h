@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <string>
+#include <cstdint>
 #include "Main.h"
 
 class SerialPort {
@@ -25,6 +26,10 @@ private:
     std::string m_commName;
     HANDLE      m_hCommPort;
 
+    bool _locked = false;
+
+    DCB _dcb;
+
 public:
     SerialPort();
     virtual ~SerialPort();
@@ -38,6 +43,9 @@ public:
     int  timedRead(uint32_t ms);
     int  timedRead(uint8_t* buf, size_t len, uint32_t ms);
     int  timedRead(char* buf, size_t len, uint32_t ms);
+    int  read(char* buf, size_t len);
+
+    bool isOpen() { return m_hCommPort != INVALID_HANDLE_VALUE; }
 
     void flushInput();
 
@@ -52,6 +60,13 @@ public:
 
     void setRts(bool on);
     void setDtr(bool on);
+    void setRtsDtr(bool rts, bool dtr);
+
+    bool locked() { return _locked; }
+    void lock() { _locked = true; }
+    void unlock() { _locked = false; }
+
+    void restartPort();
 };
 
 bool selectComPort(std::string& comName);

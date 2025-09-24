@@ -1,9 +1,12 @@
-#include "Console.h"
 #include <windows.h>
+#include "Console.h"
+#include <conio.h>
 #include <iostream>
 
+#ifndef ENABLE_VIRTUAL_TERMINAL_INPUT
 const int ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
 const int ENABLE_VIRTUAL_TERMINAL_INPUT      = 0x0200;
+#endif
 
 HANDLE hStdin;
 HANDLE hStdout;
@@ -88,9 +91,5 @@ int getConsoleChar() {
 }
 
 bool availConsoleChar() {
-    INPUT_RECORD r;
-    DWORD        n;
-    PeekConsoleInput(hStdin, &r, 1, &n);
-
-    return n > 0;
+    return _kbhit();
 }

@@ -46,7 +46,7 @@ SerialPort::SerialPort() {
     InvalidateHandle(m_hThreadTerm);
     InvalidateHandle(m_hThread);
     InvalidateHandle(m_hThreadStarted);
-    InvalidateHandle(m_hCommPort);
+    m_hCommPort = INVALID_HANDLE_VALUE;
 }
 
 SerialPort::~SerialPort() {}
@@ -92,14 +92,14 @@ void SerialPort::flushInput() {
 }
 #include <strsafe.h>
 
-void ShowError(const char* lpszFunction) {
+void ShowError(const char* lpszFunction, DWORD err) {
     // Retrieve the system error message for the last-error code
     LPVOID lpMsgBuf;
     DWORD  dw = GetLastError();
 
     FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                   NULL,
-                  dw,
+                  err,
                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                   (LPTSTR)&lpMsgBuf,
                   0,
@@ -108,6 +108,10 @@ void ShowError(const char* lpszFunction) {
     // Display the error message and exit the process
 
     printf("%s failed with error %d: %s", lpszFunction, dw, lpMsgBuf);
+}
+
+void ShowError(const char* lpszFunction) {
+    ShowError(lpszFunction, GetLastError());
 }
 
 bool SerialPort::reOpenPort() {
@@ -129,39 +133,75 @@ bool SerialPort::reOpenPort() {
         return false;
     }
 
-    DCB dcb       = { 0 };
-    dcb.DCBlength = sizeof(DCB);
-    if (!::GetCommState(m_hCommPort, &dcb)) {
+    _dcb           = { 0 };
+    _dcb.DCBlength = sizeof(DCB);
+    if (!::GetCommState(m_hCommPort, &_dcb)) {
         return false;
     }
 
-    dcb.BaudRate = m_baud;
-    dcb.ByteSize = m_dataBits;
-    dcb.Parity   = m_parity;
+    _dcb.BaudRate = m_baud;
+    _dcb.ByteSize = m_dataBits;
+    _dcb.Parity   = m_parity;
     switch (m_stopBits) {
         case 1:
-            dcb.StopBits = ONESTOPBIT;
+            _dcb.StopBits = ONESTOPBIT;
             break;
         case 2:
-            dcb.StopBits = TWOSTOPBITS;
+            _dcb.StopBits = TWOSTOPBITS;
             break;
         default:
-            dcb.StopBits = ONE5STOPBITS;
+            _dcb.StopBits = ONE5STOPBITS;
             break;
     }
 
-    dcb.fDsrSensitivity = 0;
-    dcb.fDtrControl     = DTR_CONTROL_DISABLE;
-    dcb.fRtsControl     = RTS_CONTROL_DISABLE;
-    dcb.fOutxDsrFlow    = 0;
+    _dcb.fDsrSensitivity = 0;
+    // RTS and DTR must be at the same level to avoid driving low either
+    // EN or IO0.  DTR must be enabled other USB CDC serial ports will
+    // not be in the connected state.  Hence both DTR and RTS must be
+    // enabled.
 
-    if (!::SetCommState(m_hCommPort, &dcb)) {
+    //    _dcb.fDtrControl  = DTR_CONTROL_ENABLE;
+    //    _dcb.fRtsControl  = RTS_CONTROL_ENABLE;
+    _dcb.fOutxDsrFlow = 0;
+
+    if (!::SetCommState(m_hCommPort, &_dcb)) {
         ShowError("SetCommState");
         assert(0);
         return false;
     }
     setTimeout(0);
+#if 0
+    auto rts = _dcb.fRtsControl == RTS_CONTROL_ENABLE;
+    auto dtr = _dcb.fDtrControl == DTR_CONTROL_ENABLE;
 
+    if (dtr && rts) {
+        // already in desired state; do nothing
+    } else if (dtr && !rts) {
+        // IO0 is driven low; assert RTS to release IO0
+        // and get to the desired state
+        setRtsDtr(true, true);
+    } else if (!dtr && rts) {
+        // EN is driven low; assert DTR to release EN
+        // and get to the desired state
+        setRtsDtr(true, true);
+    } else {
+        // With !dtr && !rts, EN and IO0 are both released,
+        // but we want dtr asserted so USB CDC devices will
+        // be in connected state, and rts asserted so neither
+        // EN nor IO0 is driven low.  If we go directly to
+        // rts and dtr true, that often results in a reset
+        // (EN low) pulse because Windows drivers sometimes
+        // set RTS a few hundred microseconds before setting,
+        // DTR, resuiting in a spurious reset pulse.  Explicitly
+        // setting DTR first changes it to a pulse on IO0
+        // which, though not ideal, is better than a reset.
+        setRtsDtr(false, true);
+        setRtsDtr(true, true);
+    }
+#else
+    setDtr(true);
+    setRts(true);
+#endif
     return true;
 }
 
@@ -213,27 +253,22 @@ bool SerialPort::setMode(DWORD dwBaudRate, BYTE byByteSize, BYTE byParity, BYTE 
     m_parity   = byParity;
     m_stopBits = byStopBits;
 
-    DCB dcb       = { 0 };
-    dcb.DCBlength = sizeof(DCB);
-    if (!::GetCommState(m_hCommPort, &dcb)) {
-        return false;
-    }
-    dcb.BaudRate = m_baud;
-    dcb.ByteSize = m_dataBits;
-    dcb.Parity   = m_parity;
+    _dcb.BaudRate = m_baud;
+    _dcb.ByteSize = m_dataBits;
+    _dcb.Parity   = m_parity;
     switch (m_stopBits) {
         case 1:
-            dcb.StopBits = ONESTOPBIT;
+            _dcb.StopBits = ONESTOPBIT;
             break;
         case 2:
-            dcb.StopBits = TWOSTOPBITS;
+            _dcb.StopBits = TWOSTOPBITS;
             break;
         default:
-            dcb.StopBits = ONE5STOPBITS;
+            _dcb.StopBits = ONE5STOPBITS;
             break;
     }
 
-    if (!::SetCommState(m_hCommPort, &dcb)) {
+    if (!::SetCommState(m_hCommPort, &_dcb)) {
         ShowError("SetCommState");
         assert(0);
         return false;
@@ -242,23 +277,76 @@ bool SerialPort::setMode(DWORD dwBaudRate, BYTE byByteSize, BYTE byParity, BYTE 
 }
 
 void SerialPort::setRts(bool on) {
-    DCB dcb       = { 0 };
-    dcb.DCBlength = sizeof(DCB);
-    if (!::GetCommState(m_hCommPort, &dcb)) {
-        return;
-    }
-    dcb.fRtsControl = on ? RTS_CONTROL_ENABLE : RTS_CONTROL_DISABLE;
-    ::SetCommState(m_hCommPort, &dcb);
+    _dcb.fRtsControl = on ? RTS_CONTROL_ENABLE : RTS_CONTROL_DISABLE;
+    ::SetCommState(m_hCommPort, &_dcb);
 }
 
 void SerialPort::setDtr(bool on) {
-    DCB dcb       = { 0 };
-    dcb.DCBlength = sizeof(DCB);
-    if (!::GetCommState(m_hCommPort, &dcb)) {
-        return;
+    _dcb.fDtrControl = on ? DTR_CONTROL_ENABLE : DTR_CONTROL_DISABLE;
+    ::SetCommState(m_hCommPort, &_dcb);
+}
+
+void SerialPort::setRtsDtr(bool rts, bool dtr) {
+    _dcb.fRtsControl = rts ? RTS_CONTROL_ENABLE : RTS_CONTROL_DISABLE;
+    _dcb.fDtrControl = dtr ? DTR_CONTROL_ENABLE : DTR_CONTROL_DISABLE;
+    ::SetCommState(m_hCommPort, &_dcb);
+}
+
+void SerialPort::restartPort() {
+    lock();
+    int count = 0;
+
+    errorColor();
+    std::cout << "Serial port disconnected - waiting for reconnect" << std::endl;
+    normalColor();
+
+    CloseHandle(m_hCommPort);
+    Sleep(100);
+    while (true) {
+        Sleep(20);
+        if (reOpenPort()) {
+            break;
+        }
+        if (count == 30) {
+            std::cout << "Type any key to quit" << std::endl;
+        }
+        ++count;
+        if (availConsoleChar()) {
+            restoreConsoleModes();
+            exit(0);
+        }
     }
-    dcb.fDtrControl = on ? DTR_CONTROL_ENABLE : DTR_CONTROL_DISABLE;
-    ::SetCommState(m_hCommPort, &dcb);
+
+    goodColor();
+    std::cout << "Serial port reconnected" << std::endl;
+    normalColor();
+    unlock();
+}
+
+int SerialPort::read(char* buf, size_t len) {
+    DWORD dwBytesRead = 0;
+    if (locked()) {
+        Sleep(10);
+        return 0;
+    }
+    if (::ReadFile(m_hCommPort, buf, len, &dwBytesRead, NULL)) {
+        if (dwBytesRead == 0) {}
+        return dwBytesRead;
+    }
+    auto err = GetLastError();
+    switch (err) {
+        case 0:
+            return 0;
+        case ERROR_BAD_COMMAND:
+        case ERROR_ACCESS_DENIED:
+        case ERROR_OPERATION_ABORTED:
+            restartPort();
+            return 0;
+        default:
+            ShowError("Read error", err);
+            break;
+    }
+    return -1;
 }
 
 unsigned __stdcall SerialPort::ThreadFn(void* pvParam) {
@@ -275,63 +363,32 @@ unsigned __stdcall SerialPort::ThreadFn(void* pvParam) {
         DWORD dwBytesRead = 0;
         char  szTmp[128];
 
-        if (!::ReadFile(apThis->m_hCommPort, szTmp, sizeof(szTmp), &dwBytesRead, NULL)) {
-            auto err = GetLastError();
-            switch (err) {
-                case 0:
-                    break;
-                case ERROR_BAD_COMMAND:
-                case ERROR_ACCESS_DENIED:
-                case ERROR_OPERATION_ABORTED:
-                    errorColor();
-                    std::cout << "Serial port disconnected - waiting for reconnect" << std::endl;
-                    normalColor();
-                    std::cout << "Type any key to quit" << std::endl;
-                    CloseHandle(apThis->m_hCommPort);
-                    while (!apThis->reOpenPort()) {
-                        if (availConsoleChar()) {
-                            restoreConsoleModes();
-                            exit(0);
-                        }
-                        Sleep(100);
-                    }
-                    goodColor();
-                    std::cout << "Serial port reconnected" << std::endl;
-                    normalColor();
-                    resetFluidNC();
-                    break;
-                default:
-                    std::cout << "Error " << err << std::endl;
-                    break;
-            }
-        }
+        dwBytesRead = apThis->read(szTmp, sizeof(szTmp));
         if (dwBytesRead > 0) {
             colorizeOutput(szTmp, dwBytesRead);
-        } else {
-            // Timeout
-            // std::cout << "T" << std::endl;
         }
     }
     return 0;
 }
 
 HRESULT SerialPort::write(const char* data, DWORD dwSize) {
-    int        iRet = 0;
-    OVERLAPPED ov;
-    memset(&ov, 0, sizeof(ov));
-    ov.hEvent            = CreateEvent(0, true, 0, 0);
+    if (locked()) {
+        // discard data while port is being reopened
+        //        std::cout << "<";
+        return S_OK;
+    }
+    int   iRet           = 0;
     DWORD dwBytesWritten = 0;
 
-    iRet = WriteFile(m_hCommPort, data, dwSize, &dwBytesWritten, &ov);
+    iRet = WriteFile(m_hCommPort, data, dwSize, &dwBytesWritten, NULL);
     if (iRet == 0) {
-        if (GetLastError() == ERROR_BAD_COMMAND) {
-            fprintf(stderr, "Write to serial port failed; exiting\n");
-            exit(0);
+        if (m_hCommPort != INVALID_HANDLE_VALUE && GetLastError() == ERROR_BAD_COMMAND) {
+            //            fprintf(stderr, "Write to serial port failed; reopening\n");
+            //            restartPort();
+            //            restoreConsoleModes();
+            //            exit(0);
         }
-        WaitForSingleObject(ov.hEvent, 1000);
     }
-
-    CloseHandle(ov.hEvent);
 
     return S_OK;
 }
