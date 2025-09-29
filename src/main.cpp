@@ -132,6 +132,10 @@ static const char* getSaveName(const char* proposal) {
     std::cout << "FluidNC filename [" << proposal << "]: ";
     std::getline(std::cin, saveName);
 
+    if (saveName.length() && saveName[saveName.length() - 1] == '\r') {
+        saveName.pop_back();
+    }
+
     if (saveName.length() == 0) {
         saveName = proposal;
     }
