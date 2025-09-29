@@ -11,6 +11,7 @@
 #include "stm32loader/stm32action.h"
 #include "Console.h"
 #include "SendGCode.h"
+#include "RxThread.h"
 #include <unistd.h>
 
 static void errorExit(const char* msg) {
@@ -27,8 +28,9 @@ static SerialPort comport;
 
 static void okayExit(const char* msg) {
     comport.write("\x0c");  // Send CTRL-L to exit FluidNC echo mode
+    comport.lock();
     std::cerr << msg << std::endl;
-    Sleep(1000);
+    Sleep(200);
 
     comport.setRts(false);
     comport.setDtr(false);
@@ -227,44 +229,8 @@ void uploadFile(const std::string& path, const std::string& remoteName) {
     //    msg += ':';
     //    msg += std::to_string(size);
     msg += '\n';
-    comport.setDirect();
     comport.write(msg);
-    int ch;
-    while (true) {
-        ch = comport.timedRead(1);
-
-        if (ch == -1) {
-        } else if (ch == 0x18 || ch == 0x04) {
-            // 0x18 is the correct cancel character but older FluidNC versions use 0x04
-            std::cout << "FluidNC cancelled the upload" << std::endl;
-            comport.setIndirect();
-            break;
-        } else if (ch == 'C') {
-            int ret = xmodemTransmit(comport, infile);
-            comport.flushInput();
-            comport.setIndirect();
-            if (ret < 0) {
-                std::cout << "Returned " << ret << std::endl;
-            }
-            break;
-        } else if (ch == '$') {
-            std::cout << (char)ch;
-            // FluidNC is echoing the line
-            do {
-                ch = comport.timedRead(1);
-                if (ch != -1) {
-                    std::cout << (char)ch;
-                }
-            } while (ch != '\n');
-        } else if (ch == '\n') {
-            std::cout << (char)ch;
-        } else if (ch == 'e') {
-            // Probably an "error:N" message
-            std::cout << (char)ch;
-            comport.setIndirect();
-            break;
-        }
-    }
+    xmodemTransmit(comport, infile);
 }
 
 const char* uploadpath = nullptr;
@@ -315,6 +281,8 @@ int main(int argc, char** argv) {
         errorstr += comName;
         errorExit(errorstr.c_str());
     }
+
+    startRxThread(&comport);
 
     if (uploadName.length()) {
         if (remoteName.length()) {
@@ -396,13 +364,9 @@ int main(int argc, char** argv) {
                     std::cout << "Sending " << path << std::endl;
                     normalColor();
                     std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
-                    int           ret = sendGCode(comport, infile);
+                    sendGCode(comport, infile);
                     infoColor();
-                    if (ret < 0) {
-                        std::cout << "Sending stopped by error" << std::endl;
-                    } else {
-                        std::cout << "Sending succeeded" << std::endl;
-                    }
+                    std::cout << "Sent" << std::endl;
                     normalColor();
                 }
             } break;

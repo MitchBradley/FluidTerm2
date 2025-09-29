@@ -38,6 +38,8 @@
 #include <thread>
 #include <chrono>
 
+#include "RxThread.h"
+
 /* CRC16 implementation acording to CCITT standards */
 
 static const uint16_t crc16tab[256] = {
@@ -77,7 +79,10 @@ static uint16_t crc16_ccitt(const char* buf, size_t len) {
 
 #define DLY_1S 1000
 #define MAXRETRANS 6
-#define TRANSMIT_XMODEM_1K
+
+// Sending 1K packets requires long serial receive buffers at
+// the FluidNC end.  128-byte packets perform reasonably well.
+// #define TRANSMIT_XMODEM_1K
 
 static int check(int crc, const char* buf, int sz) {
     if (crc) {
@@ -150,7 +155,7 @@ static int _xmodemReceive(SerialPort& serial, std::ostream& out) {
             if (trychar) {
                 serial.write(trychar);
             }
-            if ((c = serial.timedRead(2000)) >= 0) {
+            if ((c = timedRead(2000)) >= 0) {
                 switch (c) {
                     case SOH:
                         bufsz = 128;
@@ -163,7 +168,7 @@ static int _xmodemReceive(SerialPort& serial, std::ostream& out) {
                         serial.write(ACK);
                         return len; /* normal end */
                     case CAN:
-                        if ((c = serial.timedRead(1000)) == CAN) {
+                        if ((c = timedRead(1000)) == CAN) {
                             serial.write(ACK);
                             return -1; /* canceled by remote */
                         }
@@ -190,7 +195,7 @@ static int _xmodemReceive(SerialPort& serial, std::ostream& out) {
         *p++    = c;
         for (i = 0; i < (bufsz + (crc ? 1 : 0) + 3); ++i) {
             ;
-            if ((c = serial.timedRead(1000)) < 0) {
+            if ((c = timedRead(1000)) < 0) {
                 goto reject;
             }
             *p++ = c;
@@ -227,7 +232,17 @@ int xmodemReceive(SerialPort& serial, std::ostream& out) {
     return retval;
 }
 
-int xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
+int pushback = -1;
+int nextchar(int timeout) {
+    if (pushback != -1) {
+        int ret  = pushback;
+        pushback = -1;
+        return ret;
+    }
+    return timedRead(timeout);
+}
+
+int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
     char    xbuff[1030]; /* 1024 for XModem 1k + 3 head chars + 2 crc + nul */
     size_t  bufsz;
     bool    crc      = true;
@@ -238,7 +253,7 @@ int xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
 
     for (;;) {
         for (retry = 0; retry < 16; ++retry) {
-            if ((c = serial.timedRead(2000)) >= 0) {
+            if ((c = nextchar(2000)) >= 0) {
                 switch (c) {
                     case 'C':
                         crc = true;
@@ -247,7 +262,7 @@ int xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
                         crc = false;
                         goto start_trans;
                     case CAN:
-                        if ((c = serial.timedRead(1000)) == CAN) {
+                        if ((c = nextchar(1000)) == CAN) {
                             serial.write(ACK);
                             return -1; /* canceled by remote */
                         }
@@ -298,15 +313,15 @@ int xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
                         serial.write(xbuff, bufsz + 4 + (crc ? 1 : 0));
                         ++retry;
                     }
-                    if ((c = serial.timedRead(1000)) >= 0) {
+                    if ((c = nextchar(1000)) >= 0) {
                         switch (c) {
                             case ACK:
                                 ++packetno;
-                                std::cout << int(packetno) << '\r';
+                                std::cout << int(packetno * bufsz) << '\r';
                                 len += bufsz;
                                 goto start_trans;
                             case CAN:
-                                if ((c = serial.timedRead(1000)) == CAN) {
+                                if ((c = nextchar(1000)) == CAN) {
                                     serial.write(ACK);
                                     return -1; /* canceled by remote */
                                 }
@@ -333,7 +348,7 @@ int xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
             } else {
                 for (retry = 0; retry < 10; ++retry) {
                     serial.write(EOT);
-                    if ((c = serial.timedRead(2000)) == ACK) {
+                    if ((c = nextchar(2000)) == ACK) {
                         break;
                     }
                 }
@@ -341,6 +356,48 @@ int xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
             }
         }
     }
+}
+int xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
+    queuedReception();
+    pushback = -1;
+
+    int ch;
+    int ret = 0;
+    while (true) {
+        ch = nextchar(5);  // timedRead(500);
+        if (ch == -1) {
+        } else if (ch == 0x18 || ch == 0x04) {
+            // 0x18 is the correct cancel character but older FluidNC versions use 0x04
+            std::cout << "FluidNC cancelled the upload" << std::endl;
+            break;
+        } else if (ch == 'C') {
+            // This speeds up the transfer by letting the transmitter see this first 'C'
+            pushback = 'C';
+            ret      = _xmodemTransmit(serial, infile);
+            if (ret < 0) {
+                std::cout << "Returned " << ret << std::endl;
+            }
+            break;
+        } else if (ch == '$') {
+            std::cout << (char)ch;
+            // FluidNC is echoing the line
+            do {
+                ch = nextchar(5);  // timedRead(500);
+                if (ch != -1) {
+                    std::cout << (char)ch;
+                }
+            } while (ch != '\n');
+        } else if (ch == '\n') {
+            std::cout << (char)ch;
+        } else if (ch == 'e') {
+            // Probably an "error:N" message
+            std::cout << (char)ch;
+            break;
+        }
+    }
+
+    normalReception();
+    return ret;
 }
 
 #ifdef TEST_XMODEM_RECEIVE

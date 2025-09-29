@@ -26,22 +26,16 @@
 #include "serial.h"
 #include "port.h"
 #include <../windows/SerialPort.h>
-
-// static uint32_t saved_baudrate;
-static unsigned long saved_baudrate;
-static uint8_t       saved_data_bits;
-static uint8_t       saved_parity;
-static uint8_t       saved_stop_bits;
-
-static bool passthrough = false;
+#include <../windows/RxThread.h>
 
 // cppcheck-suppress unusedFunction
 static port_err_t serial_open(struct port_interface* port, struct port_options* ops) {
     port->priv = ops->extra;
     auto h     = (SerialPort*)port->priv;
-    h->setDirect();
-    passthrough = strcmp(ops->device, "direct") != 0;
-    if (passthrough) {
+
+    if (strcmp(ops->device, "direct") != 0) {
+        queuedReception();
+
         char buf[256];
         sprintf(buf, "$Uart/Passthrough=%s\n", ops->device);
         h->write(buf);
@@ -49,7 +43,7 @@ static port_err_t serial_open(struct port_interface* port, struct port_options* 
         size_t len;
         bool   is_error = false;
         do {
-            len      = h->timedRead(bufp, 256, 500);
+            len      = timedRead(bufp, 256, 500);
             buf[len] = '\0';
             if (len) {
                 fprintf(stderr, "< %s\n", buf);
@@ -59,61 +53,47 @@ static port_err_t serial_open(struct port_interface* port, struct port_options* 
             }
         } while (len);
         if (is_error) {
-            h->setIndirect();
-            return PORT_ERR_UNKNOWN;
+            normalReception();
+            PORT_ERR_UNKNOWN;
         }
-    } else {
-        fprintf(stderr, "Connecting to STM32 on %s\n", h->m_portName.c_str());
-        h->getMode(saved_baudrate, saved_data_bits, saved_parity, saved_stop_bits);
-        const char* mode      = ops->serial_mode;
-        uint8_t     data_bits = mode[0] - '0';
-        uint8_t     parity    = mode[1] == 'e' ? 2 : (mode[1] == 'o' ? 1 : 0);
-        uint8_t     stop_bits = mode[2] - '0';
-
-        h->setMode(ops->baudRate, data_bits, parity, stop_bits);
+        return PORT_ERR_OK;
     }
+
+    const char* mode      = ops->serial_mode;
+    uint8_t     data_bits = mode[0] - '0';
+    uint8_t     parity    = mode[1] == 'e' ? 2 : (mode[1] == 'o' ? 1 : 0);
+    uint8_t     stop_bits = mode[2] - '0';
+
+    fprintf(stderr, "Connecting to STM32 on COM port\n");
+    changeMode(ops->baudRate, ops->serial_mode);
+    queuedReception();
     return PORT_ERR_OK;
 }
 
 // cppcheck-suppress unusedFunction
 static port_err_t serial_close(struct port_interface* port) {
     auto h = (SerialPort*)port->priv;
-    if (!passthrough) {
-        h->setMode(saved_baudrate, saved_data_bits, saved_parity, saved_stop_bits);
-    }
-    h->setIndirect();
-
+    normalReception();
     return PORT_ERR_OK;
 }
 
 static port_err_t serial_read(struct port_interface* port, void* buf, size_t nbyte) {
-    auto     h   = (SerialPort*)port->priv;
-    uint8_t* pos = (uint8_t*)buf;
+    char* cbuf = (char*)buf;
 
+    auto h = (SerialPort*)port->priv;
     if (h == NULL) {
         return PORT_ERR_UNKNOWN;
     }
 
-#if 0
     while (nbyte) {
-        int byte = h->timedRead(2000);
-        if (byte == -1) {
-            byte = h->timedRead(2000);
-            if (byte == -1) {
-                fprintf(stderr, "XXXX\n");
-                return PORT_ERR_TIMEDOUT;
-            }
+        auto got = timedRead(cbuf, nbyte, 2000);
+        if (got == 0) {
+            return PORT_ERR_TIMEDOUT;
         }
-        fprintf(stderr, "%02x ", (uint8_t)byte);
-        *pos++ = byte;
-        --nbyte;
+        cbuf += got;
+        nbyte -= got;
     }
-    fprintf(stderr, "\n");
-#else
-    if (h->timedRead(pos, nbyte, 2000) != nbyte) {
-        return PORT_ERR_TIMEDOUT;
-    }
-#endif
+
     return PORT_ERR_OK;
 }
 

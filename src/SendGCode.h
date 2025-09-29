@@ -1,6 +1,6 @@
 #pragma once
-
 #include "SerialPort.h"
-#include <fstream>
+#include "RxThread.h"
+#include <iostream>
 
-int sendGCode(SerialPort& serial, std::ifstream& in);
+void sendGCode(SerialPort* serial, std::ifstream& infile);
