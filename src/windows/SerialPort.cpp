@@ -9,20 +9,12 @@
 
 #include "Colorize.h"
 
-void SerialPort::setTimeout(DWORD ms) {
+void SerialPort::setTimeout(DWORD interval, DWORD multiplier, DWORD constant) {
     COMMTIMEOUTS timeouts;
-    if (ms != 1) {
-        timeouts.ReadIntervalTimeout        = 0;
-        timeouts.ReadTotalTimeoutMultiplier = 0;
-        timeouts.ReadTotalTimeoutConstant   = ms;
-    } else {
-        timeouts.ReadIntervalTimeout        = MAXDWORD;
-        timeouts.ReadTotalTimeoutMultiplier = 0;
-        // Block in the serial driver until at least one character is received -
-        // but we can still timeout at the GetOverlappedResultEx level
-        // timeouts.ReadTotalTimeoutConstant = 10;
-        timeouts.ReadTotalTimeoutConstant = 10;
-    }
+    timeouts.ReadIntervalTimeout        = interval;
+    timeouts.ReadTotalTimeoutMultiplier = multiplier;
+    timeouts.ReadTotalTimeoutConstant   = constant;
+
     timeouts.WriteTotalTimeoutMultiplier = 0;
     timeouts.WriteTotalTimeoutConstant   = 2;
 
@@ -51,27 +43,6 @@ SerialPort::SerialPort() {
 
 SerialPort::~SerialPort() {}
 
-size_t SerialPort::copy_out(char* buf, size_t len) {
-    auto have   = m_end - m_bufp;
-    auto toCopy = std::min(have, len);
-    if (toCopy) {
-        memcpy(buf, &m_buf[m_bufp], toCopy);
-        m_bufp += toCopy;
-        if (m_bufp == m_end) {
-            m_bufp = m_end = 0;
-        }
-    }
-
-    return toCopy;
-}
-
-void SerialPort::setDirect() {
-    m_direct = true;
-}
-void SerialPort::setIndirect() {
-    setTimeout(0);
-    m_direct = false;
-}
 void SerialPort::flushInput() {
     //    while (timedRead(500) >= 0) {}
 }
@@ -111,13 +82,6 @@ bool SerialPort::reOpenPort() {
     );
     if (m_hCommPort == INVALID_HANDLE_VALUE) {
         return false;
-    }
-
-    if (!m_read_overlapped.hEvent) {
-        m_read_overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);  // Manual-reset event
-    }
-    if (!m_write_overlapped.hEvent) {
-        m_write_overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);  // Manual-reset event
     }
 
     if (!::SetCommMask(m_hCommPort, EV_RXCHAR | EV_TXEMPTY)) {
@@ -161,9 +125,7 @@ bool SerialPort::reOpenPort() {
         assert(0);
         return false;
     }
-    setTimeout(1);
-    ResetEvent(m_read_overlapped.hEvent);
-    ResetEvent(m_write_overlapped.hEvent);
+    setTimeout(MAXDWORD, 0, 10);
 #if 0
     auto rts = _dcb.fRtsControl == RTS_CONTROL_ENABLE;
     auto dtr = _dcb.fDtrControl == DTR_CONTROL_ENABLE;
@@ -280,17 +242,6 @@ void SerialPort::restartPort() {
     std::cout << "Serial port disconnected - waiting for reconnect" << std::endl;
     normalColor();
 
-    m_end  = 0;
-    m_bufp = 0;
-    if (m_read_overlapped.hEvent) {
-        CloseHandle(m_read_overlapped.hEvent);
-        m_read_overlapped.hEvent = nullptr;
-    }
-    if (m_write_overlapped.hEvent) {
-        CloseHandle(m_write_overlapped.hEvent);
-        m_write_overlapped.hEvent = nullptr;
-    }
-
     if (m_hCommPort != INVALID_HANDLE_VALUE) {
         CloseHandle(m_hCommPort);
         m_hCommPort = INVALID_HANDLE_VALUE;
@@ -319,124 +270,45 @@ void SerialPort::restartPort() {
 }
 
 int SerialPort::read(char* buf, size_t len) {
-    if (m_hCommPort == INVALID_HANDLE_VALUE) {
+    if (m_hCommPort == INVALID_HANDLE_VALUE || locked()) {
         Sleep(10);
         return 0;
     }
 
-    if (m_direct) {
-        return 0;
-    }
-    if (locked()) {
-        Sleep(10);
-        return 0;
-    }
-    size_t copied = copy_out(buf, len);
-    if (copied) {
-        return copied;
-    }
-    // We need to use overlapped I/O instead of just depending on read timeouts, because
-    // if the COM port is a USB CDC, a USB disconnect is not easy to detect in the ReadFile
-    // result.  Sometimes the call just hangs.
-    // Initiate an overlapped read
     DWORD dwBytesRead = 0;
-    if (!m_readWait) {
-        //        if (::ReadFile(m_hCommPort, m_buf, 1024, &dwBytesRead, &m_read_overlapped)) {
-        if (::ReadFile(m_hCommPort, m_buf, 1024, &dwBytesRead, NULL)) {
-            m_bufp      = 0;
-            m_end       = dwBytesRead;
-            auto actual = copy_out(buf, len);
-            if (!actual) {
-                //                std::cout << '>';
-            } else {
-                // std::cout << 'r';
-                // std::cout << (char)m_buf[1] << "," << buf[0];
-                //                std::cout << '{' << buf[0] << "}";
-            }
-            return actual;
+    if (::ReadFile(m_hCommPort, buf, len, &dwBytesRead, NULL)) {
+#if 0  // Debugging
+        if (!dwBytesRead) {
+            std::cout << '>';
+        } else {
+            std::cout << 'r';
         }
-        switch (GetLastError()) {
-            case ERROR_IO_PENDING:
-                m_readWait = true;
-                break;
-            case ERROR_OPERATION_ABORTED:
-                //                restartPort();
-                std::cout << "Operation aborted" << std::endl;
-                return 0;
-            case WAIT_TIMEOUT:
-            case ERROR_TIMEOUT:
-                std::cout << ':';
-                // Do not reissue the read on a timeout from,GetOverlappedResult
-                return 0;
-            case ERROR_BAD_COMMAND:
-            case ERROR_ACCESS_DENIED:
-                //            case ERROR_OPERATION_ABORTED:
-                //                CancelIo(m_hCommPort);
-                std::cout << "First one" << std::endl;
-                restartPort();
-                m_readWait = false;
-                return 0;
-            default:
-                ShowError("ReadFile");
-                m_readWait = false;
-                return -1;
-        }
+#endif
+        return dwBytesRead;
     }
-    if (m_readWait) {
-        std::cout << 'o';
-        if (GetOverlappedResultEx(m_hCommPort, &m_read_overlapped, &dwBytesRead, 1000, FALSE)) {
-            m_bufp      = 0;
-            m_end       = dwBytesRead;
-            auto actual = copy_out(buf, len);
-            if (!actual) {
-                std::cout << 'T';
-                // This rarely happen because setTimeout has
-                // ReadTotalTimeoutConstant = MAXDWORD, so the overlapped read
-                // should not time out by itself; the timeout happens in
-                // GetOverlappedResultEx, which then returns false.
-                // I have seen cases where it happens with USB-CDC devices
-                m_readWait = false;
-            } else {
-                std::cout << "R " << actual << " " << std::string_view((char*)m_buf, dwBytesRead) << std::endl << std::endl;
-            }
-            return actual;
-        }
-        switch (GetLastError()) {
-            case ERROR_OPERATION_ABORTED:
-                //                restartPort();
-                std::cout << "aborted 2" << std::endl;
-                m_readWait = false;
-                return 0;
-            case WAIT_TIMEOUT:
-            case ERROR_TIMEOUT:
-                // std::cout << '+';
-                // Do not reissue the read on a timeout from,GetOverlappedResult
-                return 0;
-            case ERROR_BAD_COMMAND:
-            case ERROR_ACCESS_DENIED:
-                //            case ERROR_OPERATION_ABORTED:
-                m_readWait = false;
-                std::cout << "Second one" << std::endl;
-                restartPort();
-                setTimeout(1);
-                m_readWait = false;
-                return 0;
-            default:
-                ShowError("GetOverLappedResult error");
-                m_readWait = false;
-                return -1;
-        }
+    switch (GetLastError()) {
+        case ERROR_IO_PENDING:
+            break;
+        case WAIT_TIMEOUT:
+        case ERROR_TIMEOUT:
+            // Timeout usually shows up as ReadFile returns true with dwBytesRead = 0
+            std::cout << "Timeout ";
+            return 0;
+        case ERROR_OPERATION_ABORTED:
+        case ERROR_BAD_COMMAND:
+        case ERROR_ACCESS_DENIED:
+            restartPort();
+            return 0;
+        default:
+            ShowError("ReadFile");
+            return -1;
     }
     return 0;
 }
 
 HRESULT SerialPort::write(const char* data, DWORD dwSize) {
-    if (m_hCommPort == INVALID_HANDLE_VALUE) {
-        return 0;
-    }
-    if (locked()) {
+    if (m_hCommPort == INVALID_HANDLE_VALUE || locked()) {
         // discard data while port is being reopened
-        //        std::cout << "<";
         return S_OK;
     }
     int   iRet           = 0;
@@ -445,10 +317,7 @@ HRESULT SerialPort::write(const char* data, DWORD dwSize) {
     iRet = WriteFile(m_hCommPort, data, dwSize, &dwBytesWritten, NULL);
     if (iRet == 0) {
         if (m_hCommPort != INVALID_HANDLE_VALUE && GetLastError() == ERROR_BAD_COMMAND) {
-            //            fprintf(stderr, "Write to serial port failed; reopening\n");
-            //            restartPort();
-            //            restoreConsoleModes();
-            //            exit(0);
+            // We used to reopen the port here, but now we do it in the read path
         }
     }
 

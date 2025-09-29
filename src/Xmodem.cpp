@@ -223,12 +223,10 @@ static int _xmodemReceive(SerialPort& serial, std::ostream& out) {
     return 0;
 }
 int xmodemReceive(SerialPort& serial, std::ostream& out) {
-    serial.setDirect();
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(1s);
     int retval = _xmodemReceive(serial, out);
     serial.flushInput();
-    serial.setIndirect();
     return retval;
 }
 

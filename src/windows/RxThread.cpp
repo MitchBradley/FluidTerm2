@@ -102,44 +102,15 @@ unsigned __stdcall ThreadFn(void* pvParam) {
             if (queuedData.empty()) {
                 dwBytesRead = serial->read(szTmp, sizeof(szTmp));
                 if (dwBytesRead > 0) {
-                    // A zero length string indicates a timeout
                     std::unique_lock<std::mutex> lock(queuedMutex);
-                    queuedData.append(szTmp, dwBytesRead);  // Might append nothing
-                    queuedCond.notify_one();                // Notify the waiting consumer
+                    queuedData.append(szTmp, dwBytesRead);
+                    queuedCond.notify_one();  // Notify the waiting consumer
                 }
             } else {
                 Sleep(1);
             }
-#if 0
-        } else if (gCodeTransmitter) {
-            if (gCodeTransmitter->process_bytes((uint8_t*)szTmp, dwBytesRead)) {
-                delete gCodeTransmitter;
-                gCodeTransmitter = nullptr;
-            }
-        } else if (xModemTransmitter) {
-            bool done = false;
-            if (dwBytesRead < 0) {
-                done = true;
-            } else if (dwBytesRead > 0) {
-                for (int i = 0; !done && i < dwBytesRead; i++) {
-                    auto ch = szTmp[i];
-                    done    = xModemTransmitter->process_byte(ch);
-                }
-            } else {
-                // timeout
-                if (++timeouts == 10) {
-                    timeouts = 0;
-                    done     = xModemTransmitter->handle_timeout();
-                }
-            }
-            if (done) {
-                delete xModemTransmitter;
-                xModemTransmitter = nullptr;
-            }
-#endif
         } else {
             dwBytesRead = serial->read(szTmp, sizeof(szTmp));
-            // Errors are reported by read()
             if (dwBytesRead > 0) {
                 colorizeOutput(szTmp, dwBytesRead);
             } else {
