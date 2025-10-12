@@ -78,11 +78,11 @@ static uint16_t crc16_ccitt(const char* buf, size_t len) {
 #define CTRLZ 0x1A
 
 #define DLY_1S 1000
-#define MAXRETRANS 6
+#define MAXRETRANS 3
 
 // Sending 1K packets requires long serial receive buffers at
 // the FluidNC end.  128-byte packets perform reasonably well.
-// #define TRANSMIT_XMODEM_1K
+#define TRANSMIT_XMODEM_1K 1
 
 static int check(int crc, const char* buf, int sz) {
     if (crc) {
@@ -241,13 +241,13 @@ int nextchar(int timeout) {
 }
 
 int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
-    char    xbuff[1030]; /* 1024 for XModem 1k + 3 head chars + 2 crc + nul */
-    size_t  bufsz;
-    bool    crc      = true;
-    uint8_t packetno = 1;
-    int     i, c = 0;
-    size_t  len = 0;
-    int     retry;
+    char     xbuff[1030]; /* 1024 for XModem 1k + 3 head chars + 2 crc + nul */
+    size_t   bufsz;
+    bool     crc      = true;
+    uint32_t packetno = 1;
+    int      i, c = 0;
+    size_t   len = 0;
+    int      retry;
 
     for (;;) {
         for (retry = 0; retry < 16; ++retry) {
@@ -277,15 +277,15 @@ int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
 
         for (;;) {
         start_trans:
-#ifdef TRANSMIT_XMODEM_1K
+#if TRANSMIT_XMODEM_1K
             xbuff[0] = STX;
             bufsz    = 1024;
 #else
             xbuff[0] = SOH;
             bufsz    = 128;
 #endif
-            xbuff[1] = packetno;
-            xbuff[2] = ~packetno;
+            xbuff[1] = packetno & 0xff;
+            xbuff[2] = (~packetno) & 0xff;
 
             infile.read(&xbuff[3], (size_t)bufsz);
             size_t nbytes = infile.gcount();
@@ -325,7 +325,7 @@ int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
                                 }
                                 break;
                             case NAK:
-                                std::cout << " NAK ";
+                                std::cout << "\nNAK\n";
                                 echoing = false;
                                 break;
                             default:
@@ -334,14 +334,14 @@ int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
                                 break;
                         }
                     } else {
-                        std::cout << " Timeout ";
+                        std::cout << "\nTimeout\n";
                         echoing = false;
                     }
                 }
                 serial.write(CAN);
                 serial.write(CAN);
                 serial.write(CAN);
-                std::cout << std::endl << "Giving up" << std::endl;
+                std::cout << std::endl << "\nGiving up" << std::endl;
                 return -4; /* xmit error */
             } else {
                 for (retry = 0; retry < 10; ++retry) {

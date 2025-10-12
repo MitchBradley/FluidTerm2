@@ -15,8 +15,8 @@ void SerialPort::setTimeout(DWORD interval, DWORD multiplier, DWORD constant) {
     timeouts.ReadTotalTimeoutMultiplier = multiplier;
     timeouts.ReadTotalTimeoutConstant   = constant;
 
-    timeouts.WriteTotalTimeoutMultiplier = 0;
-    timeouts.WriteTotalTimeoutConstant   = 2;
+    timeouts.WriteTotalTimeoutMultiplier = 1;
+    timeouts.WriteTotalTimeoutConstant   = 10;
 
     if (!SetCommTimeouts(m_hCommPort, &timeouts)) {
         assert(0);
@@ -82,6 +82,10 @@ bool SerialPort::reOpenPort() {
     );
     if (m_hCommPort == INVALID_HANDLE_VALUE) {
         return false;
+    }
+
+    if (!::SetupComm(m_hCommPort, 1040, 1040)) {
+        std::cout << "SetupComm failed" << std::endl;
     }
 
     if (!::SetCommMask(m_hCommPort, EV_RXCHAR | EV_TXEMPTY)) {
@@ -311,14 +315,19 @@ HRESULT SerialPort::write(const char* data, DWORD dwSize) {
         // discard data while port is being reopened
         return S_OK;
     }
-    int   iRet           = 0;
     DWORD dwBytesWritten = 0;
 
-    iRet = WriteFile(m_hCommPort, data, dwSize, &dwBytesWritten, NULL);
-    if (iRet == 0) {
-        if (m_hCommPort != INVALID_HANDLE_VALUE && GetLastError() == ERROR_BAD_COMMAND) {
-            // We used to reopen the port here, but now we do it in the read path
+    while (dwSize) {
+        if (WriteFile(m_hCommPort, data, dwSize, &dwBytesWritten, NULL) == 0) {
+            if (m_hCommPort != INVALID_HANDLE_VALUE && GetLastError() == ERROR_BAD_COMMAND) {
+                // We used to reopen the port here, but now we do it in the read path
+            } else {
+                ShowError("WriteSerial");
+            }
+            return E_FAIL;
         }
+        data += dwBytesWritten;
+        dwSize -= dwBytesWritten;
     }
 
     return S_OK;
