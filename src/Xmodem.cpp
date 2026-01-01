@@ -240,6 +240,21 @@ int nextchar(int timeout) {
     return timedRead(timeout);
 }
 
+void dump_packet(char* p, size_t len) {
+    uint8_t* buf = (uint8_t*)p;
+    int      i   = 0;
+    for (; i < 3; i++) {
+        printf("%02x ", buf[i]);
+    }
+    printf("\n");
+    for (; i < len; i += 16) {
+        for (int j = i; (j < i + 16) && (j < len); j++) {
+            printf("%02x ", buf[j]);
+        }
+        printf("\n");
+    }
+}
+
 int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
     char     xbuff[1030]; /* 1024 for XModem 1k + 3 head chars + 2 crc + nul */
     size_t   bufsz;
@@ -308,6 +323,7 @@ int _xmodemTransmit(SerialPort& serial, std::ifstream& infile) {
                 bool echoing = false;
                 for (retry = 0; retry < MAXRETRANS;) {
                     if (!echoing) {
+                        // dump_packet(xbuff, bufsz + 4 + (crc ? 1 : 0));
                         serial.write(xbuff, bufsz + 4 + (crc ? 1 : 0));
                         ++retry;
                     }

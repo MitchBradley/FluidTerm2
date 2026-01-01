@@ -25,8 +25,8 @@
 
 #include "serial.h"
 #include "port.h"
-#include <../windows/SerialPort.h>
-#include <../windows/RxThread.h>
+#include <SerialPort.h>
+#include <RxThread.h>
 
 // cppcheck-suppress unusedFunction
 static port_err_t serial_open(struct port_interface* port, struct port_options* ops) {
@@ -37,7 +37,7 @@ static port_err_t serial_open(struct port_interface* port, struct port_options* 
         queuedReception();
 
         char buf[256];
-        sprintf(buf, "$Uart/Passthrough=%s\n", ops->device);
+        snprintf(buf, 256, "$Uart/Passthrough=%s\n", ops->device);
         h->write(buf);
         char*  bufp = buf;
         size_t len;
@@ -54,7 +54,7 @@ static port_err_t serial_open(struct port_interface* port, struct port_options* 
         } while (len);
         if (is_error) {
             normalReception();
-            PORT_ERR_UNKNOWN;
+            return PORT_ERR_UNKNOWN;
         }
         return PORT_ERR_OK;
     }

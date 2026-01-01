@@ -20,7 +20,7 @@
 #if defined(__WIN32__) || defined(__CYGWIN__)
 #    include <windows.h>
 #endif
-#include "../windows/FileDialog.h"
+#include "FileDialog.h"
 
 /* device globals */
 stm32_t*               stm    = NULL;
@@ -60,17 +60,17 @@ uint32_t     start_addr    = 0;
 uint32_t     readwrite_len = 0;
 
 static void init_options() {
-    npages       = 0;
-    spage        = 0;
-    no_erase     = 0;
-    verify       = 0;
-    retry        = 10;
-    exec_flag    = 0;
-    execute      = 0;
-    init_flag    = 1;
-    use_stdinout = 0;
-    force_binary = 0;
-    diag;
+    npages        = 0;
+    spage         = 0;
+    no_erase      = 0;
+    verify        = 0;
+    retry         = 10;
+    exec_flag     = 0;
+    execute       = 0;
+    init_flag     = 1;
+    use_stdinout  = 0;
+    force_binary  = 0;
+    diag          = NULL;
     reset_flag    = 0;
     gpio_seq      = NULL;
     start_addr    = 0;
@@ -504,7 +504,8 @@ int stm32main(int argc, char* argv[]) {
             }
 
             if (verify) {
-                uint8_t      compare[len];
+                uint8_t* compare = new uint8_t[len];
+
                 unsigned int offset, rlen;
 
                 offset = 0;
@@ -514,6 +515,7 @@ int stm32main(int argc, char* argv[]) {
                     s_err = stm32_read_memory(stm, addr + offset, compare + offset, rlen);
                     if (s_err != STM32_ERR_OK) {
                         fprintf(stderr, "Failed to read memory at address 0x%08x\n", addr + offset);
+                        delete[] compare;
                         goto close;
                     }
                     offset += rlen;
@@ -527,13 +529,16 @@ int stm32main(int argc, char* argv[]) {
                                     (uint32_t)(addr + r),
                                     buffer[r],
                                     compare[r]);
+                            delete[] compare;
                             goto close;
                         }
                         ++failed;
+                        delete[] compare;
                         goto again;
                     }
 
                 failed = 0;
+                delete[] compare;
             }
 
             addr += len;
@@ -669,9 +674,9 @@ int  parse_options(int argc, char* argv[]) {
                 }
 #else
                 if (c == 'w') {
-                    filename = getFileName("Bin or Hex\0*.bin;*.hex\0All Files\0*.*\0\0", false);
+                    filename = strdup(getFileName("Bin or Hex\0*.bin;*.hex\0All Files\0*.*\0\0", false).c_str());
                 } else {
-                    filename = getFileName("Binary\0*.bin\0All Files\0*.*\0\0", true);
+                    filename = strdup(getFileName("Binary\0*.bin\0All Files\0*.*\0\0", true).c_str())   ;
                 }
                 if (*filename == '\0') {
                     fprintf(stderr, "No file selected\n");
@@ -993,7 +998,7 @@ void show_help(char* name) {
 #include <vector>
 #include <cstring>
 #include "stm32action.h"
-#include <../windows/SerialPort.h>
+#include <SerialPort.h>
 int stm32action(SerialPort& port, std::string cmd) {
     port_opts.extra = &port;
     std::vector<char*> argv_vector;
@@ -1008,6 +1013,6 @@ int stm32action(SerialPort& port, std::string cmd) {
     int    argc = argv_vector.size();
     char** argv = argv_vector.data();
     int    ret  = stm32main(argc, argv);
-    delete str;
+    delete[] str;
     return ret;
 }

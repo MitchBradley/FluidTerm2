@@ -44,8 +44,8 @@ public:
 
     void setTimeout(DWORD interval, DWORD multiplier, DWORD constant);
 
-    HRESULT write(const char* data, DWORD dwSize);
-    HRESULT write(std::string s) { return write(s.c_str(), s.length()); }
+    size_t  write(const char* data, DWORD dwSize);
+    size_   write(std::string s) { return write(s.c_str(), s.length()); }
     void    write(char data) { write(&data, 1); }
     bool    Init(std::string szPortName = "COM1", DWORD dwBaudRate = 115200, BYTE byParity = 0, BYTE byStopBits = 1, BYTE byByteSize = 8);
     void    getMode(DWORD& dwBaudRate, BYTE& byByteSize, BYTE& byParity, BYTE& byStopBits);

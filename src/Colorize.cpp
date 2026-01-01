@@ -28,13 +28,13 @@ static const char* value_color   = bold_yellow;
 static const char* info_color    = bold_yellow;
 
 static void out(char c) {
-    std::cout << c;
+    std::cout << c << std::flush;
 }
 static void out(const char* s) {
-    std::cout << s;
+    std::cout << s << std::flush;
 }
 static void out(std::string s) {
-    std::cout << s;
+    std::cout << s << std::flush;
 }
 
 static bool colorizedSetting(std::string& line) {

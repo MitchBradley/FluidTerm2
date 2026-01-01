@@ -310,10 +310,10 @@ int SerialPort::read(char* buf, size_t len) {
     return 0;
 }
 
-HRESULT SerialPort::write(const char* data, DWORD dwSize) {
+int SerialPort::write(const char* data, DWORD dwSize) {
     if (m_hCommPort == INVALID_HANDLE_VALUE || locked()) {
         // discard data while port is being reopened
-        return S_OK;
+        return 0;
     }
     DWORD dwBytesWritten = 0;
 
@@ -324,13 +324,13 @@ HRESULT SerialPort::write(const char* data, DWORD dwSize) {
             } else {
                 ShowError("WriteSerial");
             }
-            return E_FAIL;
+            return -1;
         }
         data += dwBytesWritten;
         dwSize -= dwBytesWritten;
     }
 
-    return S_OK;
+    return dwBytesWritten;
 }
 
 bool selectComPort(std::string& comName)  //added function to find the present serial

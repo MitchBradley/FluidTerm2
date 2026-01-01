@@ -20,8 +20,6 @@
 #ifndef _SERIAL_H
 #define _SERIAL_H
 
-typedef struct serial serial_t;
-
 typedef enum {
     SERIAL_PARITY_NONE,
     SERIAL_PARITY_EVEN,

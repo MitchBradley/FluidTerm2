@@ -47,7 +47,6 @@ typedef struct stm32_cmd stm32_cmd_t;
 typedef struct stm32_dev stm32_dev_t;
 
 struct stm32 {
-    const serial_t*        serial;
     struct port_interface* port;
     uint8_t                bl_version;
     uint8_t                version;

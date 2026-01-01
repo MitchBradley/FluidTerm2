@@ -1,6 +1,5 @@
 #include <iostream>
 #include <fstream>
-#include <conio.h>
 #include <stdio.h>
 #include <string>
 #include "Main.h"
@@ -16,9 +15,6 @@
 
 static void errorExit(const char* msg) {
     std::cerr << msg << std::endl;
-    std::cerr << "..press any key to continue" << std::endl;
-    getch();
-
     // Restore input mode on exit.
     restoreConsoleModes();
     exit(1);
@@ -30,7 +26,7 @@ static void okayExit(const char* msg) {
     comport.write("\x0c");  // Send CTRL-L to exit FluidNC echo mode
     comport.lock();
     std::cerr << msg << std::endl;
-    Sleep(200);
+    sleep_ms(200);
 
     comport.setRts(false);
     comport.setDtr(false);
@@ -49,11 +45,11 @@ void resetToDownload() {
 
     // Initially RTS and DTR are true, so their hardware lines are 0, and EN and BOOT0 are 1
     comport.setRtsDtr(true, false);  // RTS true (hw 0)  and DTR false (hw 1) sets EN to hw 0
-    Sleep(10);
+    sleep_ms(10);
     comport.setRtsDtr(false, true);  // RTS false (hw 1) and DTR true (hw 0)  sets BOOT0 to hw 0
                                      // and EN goes to 1 after an RC delay, sampling BOOT0 as 0
-    Sleep(100);                      // Give the EN time to go to 1 before releasing BOOT0
-    comport.setRtsDtr(true, true);   // Back to normal
+    sleep_ms(100);                   // Give the EN time to go to 1 before releasing BOOT0
+                                     //    comport.setRtsDtr(true, true);   // Back to normal
 
     comport.unlock();
 }
@@ -61,28 +57,22 @@ void resetToDownload() {
 void resetFluidNC() {
     std::cout << "Resetting MCU" << std::endl;
     comport.lock();
-    // Idle state is DTR true, RTS true, so both low at the hardware level
 
-    comport.setRtsDtr(false, false);  // RTS false (hw 0)  and DTR false (hw 1) leaves EN and BOOT0 at 1
-    Sleep(10);
-    // Since we always leave RTS and DTR true (hardware 0), so EN and BOOT0
-    // are both high, this simple sequence suffices.
-    comport.setRtsDtr(true, false);  // RTS is true (hw 0) and DTR goes false (hw 1), driving EN low
-    Sleep(10);
-    comport.setRtsDtr(true, true);  // DTR goes back to true (hw 0), releasing EN
-    Sleep(10);
-    comport.setRtsDtr(false, false);  // DTR goes back to true (hw 0), releasing EN
-    Sleep(10);
-    comport.setRtsDtr(true, true);  // DTR goes back to true (hw 0), releasing EN
+    // Idle state is DTR true, RTS true, so both low at the hardware level,
+    // but since their values are the same, EN and IO0 are both high
+
+    comport.setDtr(false);  // RTS true (hw 0)  and DTR false (hw 1) makes EN go low
+    sleep_ms(10);
+    comport.setDtr(true);  // Return to normal idle state
 
 #if CDC_ACM_SEQUENCE
     // Sequence recommended for CDC-ACM engine in ESP32-S3
     comport.setDtr(false);
-    Sleep(2);
+    sleep_ms(2);
     comport.setRts(false);
-    Sleep(2);
+    sleep_ms(2);
     comport.setRts(true);
-    Sleep(2);
+    sleep_ms(2);
     comport.setDtr(true);
 #endif
 
@@ -90,17 +80,17 @@ void resetFluidNC() {
     // Sequence cribbed from esptool using separate setRts and setDtr
     comport.setRts(false);
     comport.setDtr(false);  // Idle
-    Sleep(100);
+    sleep_ms(100);
     comport.setDtr(true);  // Set IO0
     comport.setRts(false);
-    Sleep(100);
+    sleep_ms(100);
     comport.setRts(true);  // Reset. Calls inverted to go through (1,1) instead of (0,0)
     comport.setDtr(false);
     comport.setRts(true);  // RTS set as Windows only propagates DTR on RTS setting
-    Sleep(100);
+    sleep_ms(100);
     comport.setDtr(false);
     comport.setRts(false);  // Chip out of reset
-    Sleep(100);
+    sleep_ms(100);
     // Addition to return to Rts and Dtr active as expected by USB CDC
     comport.setDtr(true);
     comport.setRts(true);  // Normal
@@ -108,15 +98,19 @@ void resetFluidNC() {
 #if ESPTOOL_TIGHT_SEQUENCE
     // Sequence cribbed from esptool using combined setRtsDtr
     comport.setRtsDtr(false, false);  // Idle
-    Sleep(100);
+    std::cout << "idle" << std::endl;
+    sleep_ms(100);
     comport.setRtsDtr(false, true);  // Set IO0
-    Sleep(20);
+    std::cout << "IO0" << std::endl;
+    sleep_ms(20);
+    std::cout << "reset" << std::endl;
     comport.setRtsDtr(true, false);  // Reset. Calls inverted to go through (1,1) instead of (0,0)
-    Sleep(30);
+    sleep_ms(30);
+    std::cout << "unreset" << std::endl;
     comport.setRtsDtr(false, false);  // Chip out of reset
     comport.setDtr(false);            // Needed in some environments to ensure IO0=HIGH
     // Addition to return to Rts and Dtr active as expected by USB CDC
-    Sleep(40);
+    sleep_ms(40);
     comport.setRtsDtr(true, true);
 #endif
     comport.unlock();
@@ -124,7 +118,7 @@ void resetFluidNC() {
     std::cout << "Resetting Done" << std::endl;
 }
 
-static const char* getSaveName(const char* proposal) {
+static const std::string getSaveName(const std::string proposal) {
     editModeOn();
 
     static std::string saveName;
@@ -142,7 +136,7 @@ static const char* getSaveName(const char* proposal) {
 
     editModeOff();
 
-    return saveName.c_str();
+    return saveName;
 }
 
 struct cmd {
@@ -208,30 +202,16 @@ void sendOverride() {
     }
 }
 
-__int64 FileSize(const char* name) {
-    WIN32_FILE_ATTRIBUTE_DATA fad;
-    if (!GetFileAttributesEx(name, GetFileExInfoStandard, &fad))
-        return -1;  // error condition, could call GetLastError to find out more
-    LARGE_INTEGER size;
-    size.HighPart = fad.nFileSizeHigh;
-    size.LowPart  = fad.nFileSizeLow;
-    return size.QuadPart;
-}
-
 void uploadFile(const std::string& path, const std::string& remoteName) {
     std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
     if (infile.fail()) {
         std::cout << "Can't open " << path << std::endl;
         return;
     }
-    // auto size = std::filesystem::file_size(path);
-    int size = FileSize(path.c_str());
     std::cout << "XModem Upload " << path << " " << remoteName << std::endl;
 
     std::string msg = "$Xmodem/Receive=";
     msg += remoteName;
-    //    msg += ':';
-    //    msg += std::to_string(size);
     msg += '\n';
     comport.write(msg);
     xmodemTransmit(comport, infile);
@@ -272,7 +252,6 @@ int main(int argc, char** argv) {
     for (int index = optind; index < argc; index++)
         printf("Non-option argument %s\n", argv[index]);
 
-    editModeOn();
     if (comName.length() == 0 && !selectComPort(comName)) {
         editModeOff();
         errorExit("No COM port found");
@@ -321,7 +300,7 @@ int main(int argc, char** argv) {
         if (c == '\r') {
             c = '\n';
         }
-#define CTRL(N) ((N)&0x1f)
+#define CTRL(N) ((N) & 0x1f)
         switch (c) {
             case CTRL('N'):
                 std::cout << "Download" << std::endl;
@@ -351,23 +330,23 @@ int main(int argc, char** argv) {
                 stm32action(comport, command);
             } break;
             case CTRL('U'): {  // ^U
-                const char* path = getFileName("FluidNC\0*.yaml;*.flnc;*.gz\0All\0*.*\0");
-                if (*path == '\0') {
+                const std::string path = getFileName("FluidNC\0*.yaml;*.flnc;*.gz\0All\0*.*\0");
+                if (path.length() == 0) {
                     std::cout << "No file selected" << std::endl;
                 } else {
-                    const char* remoteName = getSaveName(fileTail(path));
-                    uploadFile(path, remoteName);
+                    auto remoteName = getSaveName(fileTail(path));
+                    uploadFile(path.c_str(), remoteName.c_str());
                 }
             } break;
             case CTRL('G'): {  // ^G
-                const char* path = getFileName("GCode\0*.gc;*.gcode;*.nc\0All\0*.*\0");
-                if (*path == '\0') {
+                const std::string path = getFileName("GCode\0*.gc;*.gcode;*.nc\0All\0*.*\0");
+                if (path.length() == 0) {
                     std::cout << "No file selected" << std::endl;
                 } else {
                     infoColor();
                     std::cout << "Sending " << path << std::endl;
                     normalColor();
-                    std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
+                    std::ifstream infile(path.c_str(), std::ifstream::in | std::ifstream::binary);
                     sendGCode(comport, infile);
                     infoColor();
                     std::cout << "Sent" << std::endl;

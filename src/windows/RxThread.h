@@ -8,7 +8,7 @@ void sendGCode(SerialPort& serial, std::ifstream& infile);
 void startRxThread(SerialPort* serial);
 void endRxThread();
 
-void changeMode(int baudRate, const char* mode);
+void changeMode(uint32_t baudRate, const char* mode);
 void restoreMode();
 
 void queuedReception();

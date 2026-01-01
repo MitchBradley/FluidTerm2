@@ -1,7 +1,7 @@
 #include <windows.h>
 #include <string>
 
-const char* getFileName(const char* filter, bool save) {
+const std::string getFileName(const char* filter, bool save) {
     static OPENFILENAMEA ofn;          // common dialog box structure
     static char          szFile[260];  // buffer for file name
     HANDLE               hf;           // file handle
@@ -27,13 +27,10 @@ const char* getFileName(const char* filter, bool save) {
     BOOL res = save ? GetSaveFileNameA(&ofn) : GetOpenFileNameA(&ofn);
     return res ? szFile : "";
 }
-const char* fileTail(const char* path) {
-    const char* endp = path + strlen(path);
-    while (endp != path) {
-        --endp;
-        if (*endp == '\\') {
-            return endp + 1;
-        }
+const std::string fileTail(const std::string path) {
+    size_t pos = path.rfind("\\");
+    if (pos != std::string::npos) {
+        return path.substring(pos + 1);
     }
-    return endp;
+    return "";
 }

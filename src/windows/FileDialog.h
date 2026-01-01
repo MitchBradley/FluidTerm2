@@ -1,3 +1,4 @@
 #pragma once
-const char* getFileName(const char* filter, bool save = false);
-const char* fileTail(const char* path);
+#include <string>
+const std::string getFileName(const std::string filter, bool save = false);
+const std::string fileTail(const std::string path);

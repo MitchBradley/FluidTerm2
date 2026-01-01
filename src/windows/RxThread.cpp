@@ -62,7 +62,7 @@ static BYTE  saved_data_bits;
 static BYTE  saved_parity;
 static BYTE  saved_stop_bits;
 
-void changeMode(int baudRate, const char* mode) {
+void changeMode(uint32_t baudRate, const char* mode) {
     // XXX need to cancel pending IO
 
     // mode is like "8n1"
