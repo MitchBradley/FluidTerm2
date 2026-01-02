@@ -48,7 +48,7 @@ static port_err_t serial_open(struct port_interface* port, struct port_options* 
             if (len) {
                 fprintf(stderr, "< %s\n", buf);
             }
-            if (strncasecmp(buf, "error:", 6) == 0) {
+            if (strstr(buf, "error:")) {
                 is_error = true;
             }
         } while (len);

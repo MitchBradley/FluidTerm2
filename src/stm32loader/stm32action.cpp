@@ -52,7 +52,7 @@ uint32_t     execute      = 0;
 char         init_flag    = 1;
 int          use_stdinout = 0;
 char         force_binary = 0;
-FILE*        diag;
+FILE*        diag         = stdout;
 char         reset_flag = 0;
 const char*  filename;
 char*        gpio_seq      = NULL;
@@ -70,7 +70,7 @@ static void init_options() {
     init_flag     = 1;
     use_stdinout  = 0;
     force_binary  = 0;
-    diag          = NULL;
+    diag          = stdout;
     reset_flag    = 0;
     gpio_seq      = NULL;
     start_addr    = 0;
@@ -198,8 +198,6 @@ int stm32main(int argc, char* argv[]) {
     unsigned int len;
     int          failed = 0;
     int          first_page, num_pages;
-
-    diag = stdout;
 
     if (parse_options(argc, argv) != 0)
         goto close;
@@ -1013,8 +1011,6 @@ int stm32action(SerialPort& port, std::string cmd) {
     int    argc = argv_vector.size();
     char** argv = argv_vector.data();
     int    ret  = stm32main(argc, argv);
-    fprintf(stderr, "delete\n");
     delete[] str;
-    fprintf(stderr, "ret\n");
     return ret;
 }
