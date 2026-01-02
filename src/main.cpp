@@ -5,13 +5,13 @@
 #include "Main.h"
 #include "Colorize.h"
 #include "SerialPort.h"
-#include "FileDialog.h"
 #include "Xmodem.h"
 #include "stm32loader/stm32action.h"
 #include "Console.h"
 #include "SendGCode.h"
 #include "RxThread.h"
 #include <unistd.h>
+#include "tinyfiledialogs.h"
 
 static void errorExit(const char* msg) {
     std::cerr << msg << std::endl;
@@ -118,23 +118,23 @@ void resetFluidNC() {
     std::cout << "Resetting Done" << std::endl;
 }
 
-static const std::string getSaveName(const std::string proposal) {
-    editModeOn();
-
+static const std::filesystem::path getSaveName(const std::filesystem::path proposal) {
     static std::string saveName;
 
-    std::cout << "FluidNC filename [" << proposal << "]: ";
+    editModeOn();
+
+    std::cout << "FluidNC filename [" << proposal.string() << "]: ";
     std::getline(std::cin, saveName);
+
+    editModeOff();
 
     if (saveName.length() && saveName[saveName.length() - 1] == '\r') {
         saveName.pop_back();
     }
 
-    if (saveName.length() == 0) {
-        saveName = proposal;
+    if (saveName.empty()) {
+        return proposal;
     }
-
-    editModeOff();
 
     return saveName;
 }
@@ -202,7 +202,7 @@ void sendOverride() {
     }
 }
 
-void uploadFile(const std::string& path, const std::string& remoteName) {
+void uploadFile(const std::filesystem::path& path, const std::filesystem::path& remoteName) {
     std::ifstream infile(path, std::ifstream::in | std::ifstream::binary);
     if (infile.fail()) {
         std::cout << "Can't open " << path << std::endl;
@@ -220,9 +220,9 @@ void uploadFile(const std::string& path, const std::string& remoteName) {
 const char* uploadpath = nullptr;
 
 int main(int argc, char** argv) {
-    std::string comName;
-    std::string uploadName;
-    std::string remoteName;
+    std::string           comName;
+    std::filesystem::path uploadName;
+    std::filesystem::path remoteName;
 
     opterr = 0;
     int c;
@@ -267,13 +267,11 @@ int main(int argc, char** argv) {
 
     startRxThread(&comport);
 
-    if (uploadName.length()) {
-        if (remoteName.length()) {
-            if (remoteName.back() == '/') {
-                remoteName += fileTail(uploadName.c_str());
-            }
+    if (!uploadName.empty()) {
+        if (remoteName.empty()) {
+            remoteName = uploadName.filename();
         } else {
-            remoteName = fileTail(uploadName.c_str());
+            remoteName = remoteName / uploadName.filename();
         }
         uploadFile(uploadName, remoteName);
         okayExit("Done");
@@ -330,21 +328,22 @@ int main(int argc, char** argv) {
                 stm32action(comport, command);
             } break;
             case CTRL('U'): {  // ^U
-                const std::string path = getFileName("FluidNC\0*.yaml;*.flnc;*.gz\0All\0*.*\0");
-                if (path.length() == 0) {
+                std::filesystem::path path = tinyfd_openFileDialog("Upload File", "", 0, NULL, NULL, 0);
+                if (path.empty()) {
                     std::cout << "No file selected" << std::endl;
                 } else {
-                    auto remoteName = getSaveName(fileTail(path));
+                    std::cout << path << std::endl;
+                    auto remoteName = getSaveName(path.filename());
                     uploadFile(path.c_str(), remoteName.c_str());
                 }
             } break;
             case CTRL('G'): {  // ^G
-                const std::string path = getFileName("GCode\0*.gc;*.gcode;*.nc\0All\0*.*\0");
-                if (path.length() == 0) {
+                std::filesystem::path path = tinyfd_openFileDialog("Choose GCode file", "", 0, NULL, NULL, 0);
+                if (path.empty()) {
                     std::cout << "No file selected" << std::endl;
                 } else {
                     infoColor();
-                    std::cout << "Sending " << path << std::endl;
+                    std::cout << "Sending " << path.string() << std::endl;
                     normalColor();
                     std::ifstream infile(path.c_str(), std::ifstream::in | std::ifstream::binary);
                     sendGCode(comport, infile);

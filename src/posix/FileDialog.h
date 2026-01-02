@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-const std::string getFileName(const char* filter, bool save = false);
-const std::string fileTail(const std::string path);
+#include <filesystem>
 
-__int64_t fileSize(const std::string name);
+const std::filesystem::path getFileName(const char* filter, bool save = false);
+const std::filesystem::path fileTail(const std::filesystem::path path);
