@@ -11,6 +11,7 @@
 #include "SendGCode.h"
 #include "RxThread.h"
 #include <unistd.h>
+#include <filesystem>
 #include "tinyfiledialogs.h"
 
 static void errorExit(const char* msg) {
@@ -208,7 +209,7 @@ void uploadFile(const std::filesystem::path& path, const std::filesystem::path& 
         std::cout << "Can't open " << path << std::endl;
         return;
     }
-    std::cout << "XModem Upload " << path << " " << remoteName << std::endl;
+    std::cout << "XModem Upload " << path << " " << remoteName.string() << std::endl;
 
     std::string msg = "$Xmodem/Receive=";
     msg += remoteName;
