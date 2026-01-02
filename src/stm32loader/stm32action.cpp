@@ -20,7 +20,7 @@
 #if defined(__WIN32__) || defined(__CYGWIN__)
 #    include <windows.h>
 #endif
-#include "FileDialog.h"
+#include "tinyfiledialogs.h"
 
 /* device globals */
 stm32_t*               stm    = NULL;
@@ -674,9 +674,9 @@ int  parse_options(int argc, char* argv[]) {
                 }
 #else
                 if (c == 'w') {
-                    filename = strdup(getFileName("Bin or Hex\0*.bin;*.hex\0All Files\0*.*\0\0", false).c_str());
+                    filename = strdup(tinyfd_saveFileDialog("Save to Bin or Hex File", "", 0, NULL, NULL));
                 } else {
-                    filename = strdup(getFileName("Binary\0*.bin\0All Files\0*.*\0\0", true).c_str())   ;
+                    filename = strdup(tinyfd_openFileDialog("Open Bin File", "", 0, NULL, NULL, 0));
                 }
                 if (*filename == '\0') {
                     fprintf(stderr, "No file selected\n");
@@ -1013,6 +1013,8 @@ int stm32action(SerialPort& port, std::string cmd) {
     int    argc = argv_vector.size();
     char** argv = argv_vector.data();
     int    ret  = stm32main(argc, argv);
+    fprintf(stderr, "delete\n");
     delete[] str;
+    fprintf(stderr, "ret\n");
     return ret;
 }
