@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <iostream>
 #include "serial.h"
 #include "port.h"
 #include <SerialPort.h>
@@ -39,19 +40,25 @@ static port_err_t serial_open(struct port_interface* port, struct port_options* 
         char buf[256];
         snprintf(buf, 256, "$Uart/Passthrough=%s\n", ops->device);
         h->write(buf);
-        char*  bufp = buf;
-        size_t len;
-        bool   is_error = false;
-        do {
-            len      = timedRead(bufp, 256, 500);
-            buf[len] = '\0';
-            if (len) {
-                fprintf(stderr, "< %s\n", buf);
+        char*       bufp = buf;
+        size_t      len;
+        bool        is_error = false;
+        std::string residue  = "";
+        while ((len = timedRead(bufp, 256, 500)) != 0) {
+            residue += std::string(bufp, len);
+
+            size_t pos;
+            while ((pos = residue.find('\n')) != std::string::npos) {
+                auto first = residue.substr(0, pos);
+                residue    = residue.substr(pos + 1);
+                if (first.starts_with("error:")) {
+                    is_error = true;
+                }
+                std::cout << first << std::endl;
             }
-            if (strstr(buf, "error:")) {
-                is_error = true;
-            }
-        } while (len);
+        }
+        while (len)
+            ;
         if (is_error) {
             normalReception();
             return PORT_ERR_UNKNOWN;
