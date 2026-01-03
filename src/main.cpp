@@ -212,7 +212,7 @@ void uploadFile(const std::filesystem::path& path, const std::filesystem::path& 
     std::cout << "XModem Upload " << path << " " << remoteName.string() << std::endl;
 
     std::string msg = "$Xmodem/Receive=";
-    msg += remoteName;
+    msg += remoteName.string();
     msg += '\n';
     comport.write(msg);
     xmodemTransmit(comport, infile);
@@ -299,7 +299,7 @@ int main(int argc, char** argv) {
         if (c == '\r') {
             c = '\n';
         }
-#define CTRL(N) ((N) & 0x1f)
+#define CTRL(N) ((N)&0x1f)
         switch (c) {
             case CTRL('N'):
                 std::cout << "Download" << std::endl;
