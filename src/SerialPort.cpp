@@ -171,9 +171,28 @@ size_t SerialPort::write(const char* data, size_t len) {
     return bytesWritten;
 }
 
+// Ignore these port names.
+// esptool uses the same list to filter out uninteresting ports on MacOS.
+std::vector<std::string> exclude_ports = { "cu.debug-console", "wlan-debug", "Bluetooth-Incoming-Port" };
+
+bool containsAny(const std::string& mainStr, const std::vector<std::string>& substrings) {
+    for (const auto& sub : substrings) {
+        if (mainStr.find(sub) != std::string::npos) {
+            return true;  // Found at least one substring
+        }
+    }
+    return false;  // None of the substrings were found
+}
+
+void filterPorts(std::vector<PortInfo>& ports) {
+    std::erase_if(ports, [](PortInfo i) { return containsAny(i.port, exclude_ports); });
+}
+
 bool selectComPort(std::string& portName)  //added function to find the present serial
 {
     auto choices = list_ports();
+
+    filterPorts(choices);
 
     if (choices.size() == 0) {
         portName = "";
